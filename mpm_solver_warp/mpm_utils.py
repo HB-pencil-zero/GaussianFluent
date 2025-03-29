@@ -4,6 +4,7 @@ import numpy as np
 import math
 
 
+
 # compute stress from F
 @wp.func
 def kirchoff_stress_FCR(
@@ -12,7 +13,8 @@ def kirchoff_stress_FCR(
     # compute kirchoff stress for FCR model (remember tau = P F^T)
     R = U * wp.transpose(V)
     id = wp.mat33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
-    return 2.0 * mu * (F - R) * wp.transpose(F) + id * lam * J * (J - 1.0)
+    tau = 2.0 * mu * (F - R) * wp.transpose(F) + id * lam * J * (J - 1.0)
+    return tau
 
 
 @wp.func
@@ -72,6 +74,53 @@ def kirchoff_stress_drucker_prager(
     )
     center = wp.mat33(center00, 0.0, 0.0, 0.0, center11, 0.0, 0.0, 0.0, center22)
     return U * center * wp.transpose(V) * wp.transpose(F)
+
+
+
+@wp.func
+def kirchoff_stress_neoHookeanBoarden(
+    F: wp.mat33, U: wp.mat33, V: wp.mat33, J: float, sig: wp.vec3, mu: float, lam: float, kappa: float, state: MPMStateStruct
+):
+    # 计算B = F*F^T
+    B = F * wp.transpose(F)
+    
+    # 计算B的迹
+    B_trace = B[0, 0] + B[1, 1] + B[2, 2]
+    
+    # 计算偏差部分 devB = B - I * (1/3) * trace(B)
+    devB_00 = B[0, 0] - B_trace / 3.0
+    devB_11 = B[1, 1] - B_trace / 3.0
+    devB_22 = B[2, 2] - B_trace / 3.0
+    devB_01 = B[0, 1]
+    devB_02 = B[0, 2]
+    devB_10 = B[1, 0]
+    devB_12 = B[1, 2]
+    devB_20 = B[2, 0]
+    devB_21 = B[2, 1]
+    
+    # 计算偏差应力 tau_dev = mu * J^(-2/3) * devB
+    scale_dev = mu * J**(-2.0/3.0)
+    tau_dev = wp.mat33(
+        scale_dev * devB_00, scale_dev * devB_01, scale_dev * devB_02,
+        scale_dev * devB_10, scale_dev * devB_11, scale_dev * devB_12,
+        scale_dev * devB_20, scale_dev * devB_21, scale_dev * devB_22
+    )
+    
+    # 计算体积应力 tau_vol = J * prime * I，其中 prime = kappa/2 * (J - 1/J)
+    prime = kappa / 2.0 * (J - 1.0/J)
+    scale_vol = J * prime
+    tau_vol = wp.mat33(
+        scale_vol, 0.0, 0.0,
+        0.0, scale_vol, 0.0,
+        0.0, 0.0, scale_vol
+    )
+    
+    # 根据J的值选择不同的组合方式
+    tau = tau_dev + tau_vol
+    
+    return tau
+
+
 
 
 @wp.func
@@ -264,6 +313,177 @@ def sand_return_mapping(
     return F_elastic
 
 
+@wp.func
+def NonAssociativeCamClay_return_mapping(
+    F_trial: wp.mat33,
+    state: MPMStateStruct,
+    model: MPMModelStruct,
+    p: int
+):
+    # SVD分解
+    U = wp.mat33(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    V = wp.mat33(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    sigma = wp.vec3(0.0)
+    wp.svd3(F_trial, U, sigma, V)
+
+    # 从state和model读取参数
+    logJp = state.particle_Jp[p]
+    mu = model.mu[p]
+    kappa = model.kappa[p]
+    M = model.M
+    beta = model.beta
+    xi = model.xi
+    hardeningOn = model.hardening
+
+    # 防止NaN，设置最小阈值
+    threshold = 0.0
+    sigma[0] = wp.max(sigma[0], threshold)
+    sigma[1] = wp.max(sigma[1], threshold)
+    sigma[2] = wp.max(sigma[2], threshold)
+
+    # 计算p0 - 屈服面参数
+    p0 = kappa * (0.00001 + wp.sinh(xi * wp.max(-logJp, 0.0)))
+
+    # 计算J和相关量
+    J = sigma[0] * sigma[1] * sigma[2]
+
+    # 计算B_hat_trial
+    B_hat_trial_0 = sigma[0] * sigma[0]
+    B_hat_trial_1 = sigma[1] * sigma[1]
+    B_hat_trial_2 = sigma[2] * sigma[2]
+
+    # 计算B_hat_trial的平均值
+    B_hat_trial_mean = (B_hat_trial_0 + B_hat_trial_1 + B_hat_trial_2) / 3.0
+
+    # 计算偏应力
+    J_pow = wp.pow(J, -2.0/3.0)
+    s_hat_trial_0 = mu * J_pow * (B_hat_trial_0 - B_hat_trial_mean)
+    s_hat_trial_1 = mu * J_pow * (B_hat_trial_1 - B_hat_trial_mean)
+    s_hat_trial_2 = mu * J_pow * (B_hat_trial_2 - B_hat_trial_mean)
+
+    # 计算压力
+    prime = kappa / 2.0 * (J - 1.0/J)
+    p_trial = -prime * J
+
+    # 计算屈服函数y
+    dim = 3.0  # 三维情况
+    y_s_half_coeff = (6.0 - dim) / 2.0 * (1.0 + 2.0 * beta)
+    y_p_half = M * M * (p_trial + beta * p0) * (p_trial - p0)
+
+    # 计算s_hat_trial的平方和
+    s_hat_trial_sq_sum = s_hat_trial_0 * s_hat_trial_0 + s_hat_trial_1 * s_hat_trial_1 + s_hat_trial_2 * s_hat_trial_2
+    y = y_s_half_coeff * s_hat_trial_sq_sum + y_p_half
+
+    # 初始化最终的sigma值为原始值
+    sigma_final_0 = sigma[0]
+    sigma_final_1 = sigma[1]
+    sigma_final_2 = sigma[2]
+
+    # 更新logJp的初始值
+    logJp_new = logJp
+
+    # 投影到顶点：处理p_trial > p0的情况
+    p_min = beta * p0
+    if p_trial > p0:
+        Je_new = wp.sqrt(-2.0 * p0 / kappa + 1.0)
+        sigma_final_0 = wp.pow(Je_new, 1.0/3.0)
+        sigma_final_1 = sigma_final_0
+        sigma_final_2 = sigma_final_0
+        
+        # 更新硬化参数
+        if hardeningOn > 0.5:
+            logJp_new = logJp + wp.log(J / Je_new)
+
+    # 投影到顶点：处理p_trial < -p_min的情况
+    elif p_trial < -p_min:
+        Je_new = wp.sqrt(2.0 * p_min / kappa + 1.0)
+        sigma_final_0 = wp.pow(Je_new, 1.0/3.0)
+        sigma_final_1 = sigma_final_0
+        sigma_final_2 = sigma_final_0
+        
+        # 更新硬化参数
+        if hardeningOn > 0.5:
+            logJp_new = logJp + wp.log(J / Je_new)
+
+    # 处理屈服面上的点
+    elif y >= 1e-4:
+        # 计算s_hat_trial的范数
+        s_hat_trial_norm = wp.sqrt(s_hat_trial_sq_sum)
+        s_hat_trial_norm = wp.max(s_hat_trial_norm, 1e-10)  # 避免除以零
+        
+        # 计算新的B_hat
+        sqrt_factor = wp.sqrt(-y_p_half / y_s_half_coeff)
+        J_pow_2 = wp.pow(J, 2.0/3.0)
+        scale_factor = J_pow_2 / mu * sqrt_factor / s_hat_trial_norm
+        
+        B_hat_new_0 = scale_factor * s_hat_trial_0 + B_hat_trial_mean
+        B_hat_new_1 = scale_factor * s_hat_trial_1 + B_hat_trial_mean
+        B_hat_new_2 = scale_factor * s_hat_trial_2 + B_hat_trial_mean
+        
+        # 计算新的sigma
+        sigma_final_0 = wp.sqrt(B_hat_new_0)
+        sigma_final_1 = wp.sqrt(B_hat_new_1)
+        sigma_final_2 = wp.sqrt(B_hat_new_2)
+        
+        # 硬化处理
+        if hardeningOn > 0.5 and p0 > 1e-4 and p_trial < p0 - 1e-4 and p_trial > 1e-4 - p_min:
+            p_center = (p0 - p_min) * 0.5
+            q_trial = wp.sqrt((6.0 - dim) / 2.0) * s_hat_trial_norm
+            
+            # 计算方向向量
+            direction_p = p_center - p_trial
+            direction_q = 0.0 - q_trial
+            direction_norm = wp.sqrt(direction_p * direction_p + direction_q * direction_q)
+            direction_norm = wp.max(direction_norm, 1e-10)
+            direction_p = direction_p / direction_norm
+            
+            # 计算二次方程系数
+            C = M * M * (p_center + beta * p0) * (p_center - p0)
+            B = M * M * direction_p * (2.0 * p_center - p0 + beta * p0)
+            A = M * M * direction_p * direction_p + (1.0 + 2.0 * beta) * direction_q * direction_q
+            
+            # 解二次方程
+            discriminant = B * B - 4.0 * A * C
+            # discriminant = wp.max(discriminant, 0.0)  # 确保判别式非负
+            
+            l1 = (-B + wp.sqrt(discriminant)) / (2.0 * A)
+            l2 = (-B - wp.sqrt(discriminant)) / (2.0 * A)
+            
+            p1 = p_center + l1 * direction_p
+            p2 = p_center + l2 * direction_p
+            
+            # 选择正确的解
+            diff_trial = p_trial - p_center
+            diff1 = p1 - p_center
+            
+            # 计算条件：(p_trial - p_center) * (p1 - p_center) > 0
+            if diff_trial * diff1 > 0.0:
+                p_fake = p1
+            else:
+                p_fake = p2
+            
+            Je_new_fake = wp.sqrt(wp.abs(-2.0 * p_fake / kappa + 1.0))
+            
+            # 更新硬化参数
+            if Je_new_fake > 1e-4  and hardeningOn > 0.5:
+                logJp_new = logJp + wp.log(J / Je_new_fake)
+
+    # 更新state中的塑性参数
+    state.particle_Jp[p] = logJp_new
+
+    # 构建对角矩阵
+    sigma_diag = wp.mat33(
+        sigma_final_0, 0.0, 0.0,
+        0.0, sigma_final_1, 0.0,
+        0.0, 0.0, sigma_final_2
+    )
+    
+    # 计算新的F
+    F_new = U * sigma_diag * wp.transpose(V)
+    return F_new
+
+
+
 @wp.kernel
 def compute_mu_lam_from_E_nu(state: MPMStateStruct, model: MPMModelStruct):
     p = wp.tid()
@@ -271,7 +491,7 @@ def compute_mu_lam_from_E_nu(state: MPMStateStruct, model: MPMModelStruct):
     model.lam[p] = (
         model.E[p] * model.nu[p] / ((1.0 + model.nu[p]) * (1.0 - 2.0 * model.nu[p]))
     )
-
+    model.kappa[p] = 2.0* model.mu[p] /3.0 + model.lam[p]
 
 @wp.kernel
 def zero_grid(state: MPMStateStruct, model: MPMModelStruct):
@@ -374,6 +594,46 @@ def p2g_apic_with_stress(state: MPMStateStruct, model: MPMModelStruct, dt: float
                         state.grid_m, ix, iy, iz, weight * state.particle_mass[p]
                     )
 
+@wp.kernel
+def p2g_flip_pic_with_stress(state: MPMStateStruct, model: MPMModelStruct, dt: float):
+    p = wp.tid()
+    if state.particle_selection[p] == 0:
+        stress = state.particle_stress[p]
+        grid_pos = state.particle_x[p] * model.inv_dx
+        base_pos_x = wp.int(grid_pos[0] - 0.5)
+        base_pos_y = wp.int(grid_pos[1] - 0.5)
+        base_pos_z = wp.int(grid_pos[2] - 0.5)
+        fx = grid_pos - wp.vec3(
+            wp.float(base_pos_x), wp.float(base_pos_y), wp.float(base_pos_z)
+        )
+        wa = wp.vec3(1.5) - fx
+        wb = fx - wp.vec3(1.0)
+        wc = fx - wp.vec3(0.5)
+        w = wp.mat33(
+            wp.cw_mul(wa, wa) * 0.5,
+            wp.vec3(0.0, 0.0, 0.0) - wp.cw_mul(wb, wb) + wp.vec3(0.75),
+            wp.cw_mul(wc, wc) * 0.5,
+        )
+        dw = wp.mat33(fx - wp.vec3(1.5), -2.0 * (fx - wp.vec3(1.0)), fx - wp.vec3(0.5))
+        for i in range(0, 3):
+            for j in range(0, 3):
+                for k in range(0, 3):
+                    ix = base_pos_x + i
+                    iy = base_pos_y + j
+                    iz = base_pos_z + k
+                    weight = w[0, i] * w[1, j] * w[2, k]  # tricubic interpolation
+                    dweight = compute_dweight(model, w, dw, i, j, k)
+                    elastic_force = -state.particle_vol[p] * stress * dweight 
+                    v_in_add = weight * state.particle_mass[p] * state.particle_v[p] 
+                    v_out_add = weight * dt * elastic_force 
+                    wp.atomic_add(state.grid_v_in, ix, iy, iz, v_in_add)
+                    wp.atomic_add(state.grid_v_out, ix, iy, iz, v_out_add)
+                    wp.atomic_add(state.grid_m, ix, iy, iz, weight * state.particle_mass[p])
+
+
+
+
+
 
 # add gravity
 @wp.kernel
@@ -381,12 +641,13 @@ def grid_normalization_and_gravity(
     state: MPMStateStruct, model: MPMModelStruct, dt: float
 ):
     grid_x, grid_y, grid_z = wp.tid()
+    force_momentum =  state.grid_v_out[grid_x, grid_y, grid_z]
     if state.grid_m[grid_x, grid_y, grid_z] > 1e-15:
-        v_out = state.grid_v_in[grid_x, grid_y, grid_z] * (
+        v_out = (state.grid_v_in[grid_x, grid_y, grid_z] + force_momentum ) * (
             1.0 / state.grid_m[grid_x, grid_y, grid_z]
         )
         # add gravity
-        v_out = v_out + dt * model.gravitational_accelaration
+        v_out = v_out + dt * model.gravitational_accelaration 
         state.grid_v_out[grid_x, grid_y, grid_z] = v_out
 
 
@@ -411,8 +672,8 @@ def g2p(state: MPMStateStruct, model: MPMModelStruct, dt: float):
         )
         dw = wp.mat33(fx - wp.vec3(1.5), -2.0 * (fx - wp.vec3(1.0)), fx - wp.vec3(0.5))
         new_v = wp.vec3(0.0, 0.0, 0.0)
-        new_C = wp.mat33(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         new_F = wp.mat33(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        new_C = wp.mat33(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         for i in range(0, 3):
             for j in range(0, 3):
                 for k in range(0, 3):
@@ -430,6 +691,62 @@ def g2p(state: MPMStateStruct, model: MPMModelStruct, dt: float):
                     new_F = new_F + wp.outer(grid_v, dweight)
 
         state.particle_v[p] = new_v
+        state.particle_x[p] = state.particle_x[p] + dt * new_v
+        state.particle_C[p] = new_C
+        I33 = wp.mat33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+        F_tmp = (I33 + new_F * dt) * state.particle_F[p]
+        state.particle_F_trial[p] = F_tmp
+
+        if model.update_cov_with_F:
+            update_cov(state, p, new_F, dt)
+
+
+# 动量还是速度得再看下
+@wp.kernel
+def g2p_flip(state: MPMStateStruct, model: MPMModelStruct, dt: float): 
+    p = wp.tid()
+    if state.particle_selection[p] == 0:
+        grid_pos = state.particle_x[p] * model.inv_dx
+        base_pos_x = wp.int(grid_pos[0] - 0.5)
+        base_pos_y = wp.int(grid_pos[1] - 0.5)
+        base_pos_z = wp.int(grid_pos[2] - 0.5)
+        fx = grid_pos - wp.vec3(
+            wp.float(base_pos_x), wp.float(base_pos_y), wp.float(base_pos_z)
+        )
+        wa = wp.vec3(1.5) - fx
+        wb = fx - wp.vec3(1.0)
+        wc = fx - wp.vec3(0.5)
+        w = wp.mat33(
+            wp.cw_mul(wa, wa) * 0.5,
+            wp.vec3(0.0, 0.0, 0.0) - wp.cw_mul(wb, wb) + wp.vec3(0.75),
+            wp.cw_mul(wc, wc) * 0.5,
+        )
+        dw = wp.mat33(fx - wp.vec3(1.5), -2.0 * (fx - wp.vec3(1.0)), fx - wp.vec3(0.5))
+        new_v = wp.vec3(0.0, 0.0, 0.0)
+        old_v = wp.vec3(0.0, 0.0, 0.0)
+        new_C = wp.mat33(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        new_F = wp.mat33(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        for i in range(0, 3):
+            for j in range(0, 3):
+                for k in range(0, 3):
+                    ix = base_pos_x + i
+                    iy = base_pos_y + j
+                    iz = base_pos_z + k
+                    dpos = wp.vec3(wp.float(i), wp.float(j), wp.float(k)) - fx
+                    weight = w[0, i] * w[1, j] * w[2, k]  # tricubic interpolation
+                    old_v = old_v + state.grid_v_in[ix, iy, iz] * weight  / state.grid_m[ix, iy, iz]
+                    grid_v = state.grid_v_out[ix, iy, iz] 
+                    new_v = new_v + grid_v * weight
+                    
+                    new_C = new_C + wp.outer(grid_v, dpos) * (
+                        weight * model.inv_dx * 4.0
+                    )
+                    dweight = compute_dweight(model, w, dw, i, j, k)
+                    new_F = new_F + wp.outer(grid_v, dweight)
+
+        flip_pic_ratio = 0.99
+        state.particle_v[p] = state.particle_v[p] * flip_pic_ratio
+        state.particle_v[p] = state.particle_v[p] + new_v - flip_pic_ratio * old_v  # flip_pic_ratio 为 0.99 
         state.particle_x[p] = state.particle_x[p] + dt * new_v
         state.particle_C[p] = new_C
         I33 = wp.mat33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
@@ -464,6 +781,10 @@ def compute_stress_from_F_trial(
             state.particle_F[p] = von_mises_return_mapping_with_damage(
                 state.particle_F_trial[p], model, p
             )
+        elif model.material == 7:
+            state.particle_F[p] = NonAssociativeCamClay_return_mapping(
+                state.particle_F_trial[p], state, model, p
+            )
         else:  # elastic
             state.particle_F[p] = state.particle_F_trial[p]
 
@@ -474,10 +795,18 @@ def compute_stress_from_F_trial(
         sig = wp.vec3(0.0)
         stress = wp.mat33(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         wp.svd3(state.particle_F[p], U, sig, V)
+        kappa = model.kappa[p]
         if model.material == 0 or model.material == 5:
             stress = kirchoff_stress_FCR(
                 state.particle_F[p], U, V, J, model.mu[p], model.lam[p]
             )
+            # print(stress)
+            # wp.printf("tmp: %s\n", tmp)
+        if model.material == 7:
+            stress = kirchoff_stress_neoHookeanBoarden(
+                state.particle_F[p], U, V, J, sig, model.mu[p], model.lam[p], kappa, state
+            )
+            
         if model.material == 1:
             stress = kirchoff_stress_StVK(
                 state.particle_F[p], U, V, sig, model.mu[p], model.lam[p]

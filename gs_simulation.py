@@ -40,8 +40,7 @@ from utils.render_utils import *
 wp.init()
 wp.config.verify_cuda = True
 
-ti.init(arch=ti.cuda, device_memory_GB=8.0)
-
+ti.init(arch=ti.cuda, device_memory_GB=4.0, random_seed=42)
 
 class PipelineParamsNoparse:
     """Same as PipelineParams but without argument parser."""
@@ -186,6 +185,7 @@ if __name__ == "__main__":
     gs_num = transformed_pos.shape[0]
     device = "cuda:0"
     filling_params = preprocessing_params["particle_filling"]
+    
 
     if filling_params is not None:
         print("Filling internal particles...")
@@ -239,6 +239,7 @@ if __name__ == "__main__":
 
     # set up the mpm solver
     mpm_solver = MPM_Simulator_WARP(10)
+    # mpm_init_pos[:, 2] = mpm_init_pos[:, 2] - 0.5
     mpm_solver.load_initial_data_from_torch(
         mpm_init_pos,
         mpm_init_vol,
@@ -286,8 +287,16 @@ if __name__ == "__main__":
             save_to_ply=args.output_ply,
             save_to_h5=args.output_h5,
         )
-
+    
+    dx = material_params["grid_lim"] / material_params['n_grid']
     substep_dt = time_params["substep_dt"]
+    E = material_params['E']
+    nu = material_params['nu']
+    rho = material_params['density']
+    def evaluate_sound_speed_linear_elasticity_analysis(E, nu, rho):
+        return np.sqrt(E * (1 - nu) / ((1 + nu) * (1 - 2 * nu) * rho))
+    cfl = 0.6
+    substep_dt = cfl * dx / evaluate_sound_speed_linear_elasticity_analysis(E, nu, rho)
     frame_dt = time_params["frame_dt"]
     frame_num = time_params["frame_num"]
     step_per_frame = int(frame_dt / substep_dt)

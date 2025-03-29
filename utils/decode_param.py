@@ -24,6 +24,12 @@ def decode_param_json(json_file):
     else:
         material_params["n_grid"] = 50
 
+    if "beta" in sim_params.keys():
+        material_params["beta"] = sim_params["beta"]
+    else:
+        material_params["beta"] = 2
+    
+    
     if "nu" in sim_params.keys():
         material_params["nu"] = sim_params["nu"]
         if material_params["nu"] > 0.5 or material_params["nu"] < 0.0:

@@ -35,7 +35,8 @@ class MPM_Simulator_WARP:
         self.mpm_model.nu = wp.zeros(shape=n_particles, dtype=float, device=device)
         self.mpm_model.mu = wp.zeros(shape=n_particles, dtype=float, device=device)
         self.mpm_model.lam = wp.zeros(shape=n_particles, dtype=float, device=device)
-
+        self.mpm_model.kappa = wp.zeros(shape=n_particles, dtype=float, device=device)
+        
         self.mpm_model.update_cov_with_F = False
 
         # material is used to switch between different elastoplastic models. 0 is jelly
@@ -46,9 +47,12 @@ class MPM_Simulator_WARP:
         self.mpm_model.yield_stress = wp.zeros(
             shape=n_particles, dtype=float, device=device
         )
-        self.mpm_model.friction_angle = 25.0
+        self.mpm_model.friction_angle = 45.0
         sin_phi = wp.sin(self.mpm_model.friction_angle / 180.0 * 3.14159265)
         self.mpm_model.alpha = wp.sqrt(2.0 / 3.0) * 2.0 * sin_phi / (3.0 - sin_phi)
+        
+        dim = 3
+        self.mpm_model.M = self.mpm_model.alpha * dim / wp.sqrt(2.0 / (6.0 - dim))
 
         self.mpm_model.gravitational_accelaration = wp.vec3(0.0, 0.0, 0.0)
 
@@ -102,8 +106,11 @@ class MPM_Simulator_WARP:
         self.mpm_state.particle_C = wp.zeros(
             shape=n_particles, dtype=wp.mat33, device=device
         )
-        self.mpm_state.particle_Jp = wp.zeros(
-            shape=n_particles, dtype=float, device=device
+        self.mpm_state.particle_Jp = wp.full(
+            shape=n_particles, 
+            value=-0.01, 
+            dtype=wp.float32,  # 建议明确指定精度
+            device=device
         )
 
         self.mpm_state.particle_selection = wp.zeros(
@@ -118,6 +125,7 @@ class MPM_Simulator_WARP:
         self.mpm_state.grid_v_in = wp.zeros(
             shape=(self.mpm_model.n_grid, self.mpm_model.n_grid, self.mpm_model.n_grid),
             dtype=wp.vec3,
+
             device=device,
         )
         self.mpm_state.grid_v_out = wp.zeros(
@@ -258,6 +266,8 @@ class MPM_Simulator_WARP:
                 self.mpm_model.material = 4
             elif kwargs["material"] == "plasticine":
                 self.mpm_model.material = 5
+            elif kwargs["material"] == "watermelon":
+                self.mpm_model.material = 7
             else:
                 raise TypeError("Undefined material type")
 
@@ -316,11 +326,14 @@ class MPM_Simulator_WARP:
             self.mpm_model.hardening = kwargs["hardening"]
         if "xi" in kwargs:
             self.mpm_model.xi = kwargs["xi"]
+        if "beta" in kwargs:
+            self.mpm_model.beta = kwargs["beta"]
         if "friction_angle" in kwargs:
             self.mpm_model.friction_angle = kwargs["friction_angle"]
             sin_phi = wp.sin(self.mpm_model.friction_angle / 180.0 * 3.14159265)
             self.mpm_model.alpha = wp.sqrt(2.0 / 3.0) * 2.0 * sin_phi / (3.0 - sin_phi)
-
+            dim = 3 
+            self.mpm_model.M = self.mpm_model.alpha * dim / wp.sqrt(2.0 / (6.0 - dim))
         if "g" in kwargs:
             self.mpm_model.gravitational_accelaration = wp.vec3(
                 kwargs["g"][0], kwargs["g"][1], kwargs["g"][2]
@@ -443,7 +456,8 @@ class MPM_Simulator_WARP:
             dict=self.time_profile,
         ):
             wp.launch(
-                kernel=p2g_apic_with_stress,
+                # kernel=p2g_apic_with_stress,
+                kernel=p2g_flip_pic_with_stress,
                 dim=self.n_particles,
                 inputs=[self.mpm_state, self.mpm_model, dt],
                 device=device,
@@ -493,7 +507,8 @@ class MPM_Simulator_WARP:
             "g2p", synchronize=True, print=False, dict=self.time_profile
         ):
             wp.launch(
-                kernel=g2p,
+                # kernel=g2p,
+                kernel=g2p_flip,
                 dim=self.n_particles,
                 inputs=[self.mpm_state, self.mpm_model, dt],
                 device=device,

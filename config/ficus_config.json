@@ -6,11 +6,14 @@
     "frame_dt": 4e-2,
     "frame_num": 125,
     "nu": 0.4,
-    "E": 2e6,
+    "E": 2e4,
     "material": "jelly",
     "density": 200,
     "g": [0,0,0],
     "grid_v_damping_scale": 0.9999,
+    "friction_angle": 45.0,
+    "beta": 2.0,
+    "xi": 3.0,
     "rpic_damping": 0.0,
     "boundary_conditions": [
         {
