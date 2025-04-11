@@ -738,17 +738,13 @@ def g2p_flip(state: MPMStateStruct, model: MPMModelStruct, dt: float):
                     grid_v = state.grid_v_out[ix, iy, iz] 
                     new_v = new_v + grid_v * weight
                     
-                    new_C = new_C + wp.outer(grid_v, dpos) * (
-                        weight * model.inv_dx * 4.0
-                    )
                     dweight = compute_dweight(model, w, dw, i, j, k)
                     new_F = new_F + wp.outer(grid_v, dweight)
 
-        flip_pic_ratio = 0.99
+        flip_pic_ratio = 0.90
         state.particle_v[p] = state.particle_v[p] * flip_pic_ratio
         state.particle_v[p] = state.particle_v[p] + new_v - flip_pic_ratio * old_v  # flip_pic_ratio 为 0.99 
         state.particle_x[p] = state.particle_x[p] + dt * new_v
-        state.particle_C[p] = new_C
         I33 = wp.mat33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
         F_tmp = (I33 + new_F * dt) * state.particle_F[p]
         state.particle_F_trial[p] = F_tmp
