@@ -254,7 +254,7 @@ if __name__ == "__main__":
 
     mpm_solver.finalize_mu_lam()
 
-    mpm_solver.import_particle_v_from_torch(torch.zeros(mpm_init_pos.shape[0], 3, device='cuda').add_(torch.tensor([0.0, 0.0, -8.0], device='cuda')))
+    mpm_solver.import_particle_v_from_torch(torch.zeros(mpm_init_pos.shape[0], 3, device='cuda').add_(torch.tensor([0.0, 0.0, -6.0], device='cuda')))
     # camera setting
     mpm_space_viewpoint_center = (
         torch.tensor(camera_params["mpm_space_viewpoint_center"]).reshape((1, 3)).cuda()

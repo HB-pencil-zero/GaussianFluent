@@ -108,7 +108,7 @@ class MPM_Simulator_WARP:
         )
         self.mpm_state.particle_Jp = wp.full(
             shape=n_particles, 
-            value=-0.01, 
+            value=-0.04, 
             dtype=wp.float32,  # 建议明确指定精度
             device=device
         )
