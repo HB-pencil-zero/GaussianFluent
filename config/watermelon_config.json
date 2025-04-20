@@ -8,11 +8,11 @@
     ],
     "substep_dt": 1e-4,
     "frame_dt": 3e-2,
-    "frame_num": 100,
+    "frame_num": 1500,
     "E": 2e3,
     "nu": 0.38,
     "friction_angle": 45.0,
-    "beta": 1.2,
+    "beta": 1.0,
     "xi": 3.0,
     "n_grid": 300,
     "hardening": 1.0,
@@ -73,7 +73,7 @@
     "init_elevation": 30.0,
     "init_radius": 8.5,
     "move_camera": true,
-    "delta_a": 3.0,
+    "delta_a": 9.0,
     "delta_e": 0,
     "delta_r": 0.0
 }

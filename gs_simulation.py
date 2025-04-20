@@ -18,6 +18,8 @@ from diff_gaussian_rasterization import (
     GaussianRasterizationSettings,
     GaussianRasterizer,
 )
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
 from scene.cameras import Camera as GSCamera
 from gaussian_renderer import render, GaussianModel
 from utils.system_utils import searchForMaxIteration
@@ -248,7 +250,36 @@ if __name__ == "__main__":
         grid_lim=material_params["grid_lim"],
     )
     mpm_solver.set_parameters_dict(material_params)
+    
+    beta = mpm_solver.mpm_model.beta.numpy()
+    mask1 = (gaussians._features_dc < -0.5).all(axis=2).cpu().numpy().squeeze()
+    mask2 = (gaussians._features_dc > -2.5).all(axis=2).cpu().numpy().squeeze()
+    mask = mask1 & mask2
+    selected_xyz = gaussians._xyz[mask]
+    
 
+    # 2. 创建KNN搜索器
+    all_xyz_np = gaussians._xyz.detach().cpu().numpy()
+    knn = NearestNeighbors(radius=0.03, algorithm='ball_tree')
+    knn.fit(all_xyz_np)
+
+    # 3. 查找距离小于0.05的所有点的索引
+    selected_xyz_np = selected_xyz.detach().cpu().numpy()
+    neighbors_indices = knn.radius_neighbors(selected_xyz_np, 0.03, return_distance=False)
+
+    # 4. 将所有邻居点的索引展平并去重
+    all_neighbors = np.unique(np.concatenate(neighbors_indices))
+
+    # 5. 创建新的mask，包含所有邻近点
+    new_mask = torch.zeros(gaussians._xyz.shape[0], dtype=torch.bool, device=gaussians._xyz.device)
+    new_mask[all_neighbors] = True
+    
+    
+    beta[new_mask.cpu().numpy()] = 3000
+    mpm_solver.mpm_model.beta.assign(beta)
+    
+    
+    
     # Note: boundary conditions may depend on mass, so the order cannot be changed!
     set_boundary_conditions(mpm_solver, bc_params, time_params)
 
@@ -305,6 +336,9 @@ if __name__ == "__main__":
     shs_render = shs
     height = None
     width = None
+    ti.reset()
+    # torch.cuda.empty_cache()
+    color_flag = False
     for frame in tqdm(range(frame_num)):
         current_camera = get_camera_view(
             model_path,
@@ -326,7 +360,7 @@ if __name__ == "__main__":
         )
 
         for step in range(step_per_frame):
-            mpm_solver.p2g2p(frame, substep_dt, device=device)
+            mpm_solver.p2g2p(step, substep_dt, device=device)
 
         if args.output_ply or args.output_h5:
             save_data_at_frame(
@@ -361,7 +395,11 @@ if __name__ == "__main__":
                 shs = torch.cat([shs_render, unselected_shs], dim=0)
 
             colors_precomp = convert_SH(shs, current_camera, gaussians, pos, rot)
-            rendering, raddi = rasterize(
+            if color_flag:
+                valid_indice = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos_valid_indice.npy")).to("cuda")
+                colors = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/phong_colors.npy")).to("cuda").reshape(-1 , 3).float()
+                colors_precomp[valid_indice] = colors
+            rendering, raddi, _ = rasterize(
                 means3D=pos,
                 means2D=init_screen_points,
                 shs=None,

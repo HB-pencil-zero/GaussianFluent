@@ -19,13 +19,12 @@ class MPMModelStruct:
     E: wp.array(dtype=float)
     nu: wp.array(dtype=float)
     kappa: wp.array(dtype=float)
-
-    material: int
+    beta : wp.array(dtype=float)
+    material: wp.array(dtype=int)
 
     ######## for plasticity ####
     yield_stress: wp.array(dtype=float)
     M : float
-    beta : float
     friction_angle: float
     alpha: float
     gravitational_accelaration: wp.vec3

@@ -331,7 +331,7 @@ def NonAssociativeCamClay_return_mapping(
     mu = model.mu[p]
     kappa = model.kappa[p]
     M = model.M
-    beta = model.beta
+    beta = model.beta[p]
     xi = model.xi
     hardeningOn = model.hardening
 
@@ -703,7 +703,7 @@ def g2p(state: MPMStateStruct, model: MPMModelStruct, dt: float):
 
 # 动量还是速度得再看下
 @wp.kernel
-def g2p_flip(state: MPMStateStruct, model: MPMModelStruct, dt: float): 
+def g2p_flip(state: MPMStateStruct, model: MPMModelStruct, dt: float , flip_pic_ratio: float): 
     p = wp.tid()
     if state.particle_selection[p] == 0:
         grid_pos = state.particle_x[p] * model.inv_dx
@@ -741,7 +741,6 @@ def g2p_flip(state: MPMStateStruct, model: MPMModelStruct, dt: float):
                     dweight = compute_dweight(model, w, dw, i, j, k)
                     new_F = new_F + wp.outer(grid_v, dweight)
 
-        flip_pic_ratio = 0.90
         state.particle_v[p] = state.particle_v[p] * flip_pic_ratio
         state.particle_v[p] = state.particle_v[p] + new_v - flip_pic_ratio * old_v  # flip_pic_ratio 为 0.99 
         state.particle_x[p] = state.particle_x[p] + dt * new_v
@@ -761,23 +760,23 @@ def compute_stress_from_F_trial(
     p = wp.tid()
     if state.particle_selection[p] == 0:
         # apply return mapping
-        if model.material == 1:  # metal
+        if model.material[p] == 1:  # metal
             state.particle_F[p] = von_mises_return_mapping(
                 state.particle_F_trial[p], model, p
             )
-        elif model.material == 2:  # sand
+        elif model.material[p] == 2:  # sand
             state.particle_F[p] = sand_return_mapping(
                 state.particle_F_trial[p], state, model, p
             )
-        elif model.material == 3:  # visplas, with StVk+VM, no thickening
+        elif model.material[p] == 3:  # visplas, with StVk+VM, no thickening
             state.particle_F[p] = viscoplasticity_return_mapping_with_StVK(
                 state.particle_F_trial[p], model, p, dt
             )
-        elif model.material == 5:
+        elif model.material[p] == 5:
             state.particle_F[p] = von_mises_return_mapping_with_damage(
                 state.particle_F_trial[p], model, p
             )
-        elif model.material == 7:
+        elif model.material[p] == 7:
             state.particle_F[p] = NonAssociativeCamClay_return_mapping(
                 state.particle_F_trial[p], state, model, p
             )
@@ -792,26 +791,26 @@ def compute_stress_from_F_trial(
         stress = wp.mat33(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         wp.svd3(state.particle_F[p], U, sig, V)
         kappa = model.kappa[p]
-        if model.material == 0 or model.material == 5:
+        if model.material[p] == 0 or model.material[p] == 5:
             stress = kirchoff_stress_FCR(
                 state.particle_F[p], U, V, J, model.mu[p], model.lam[p]
             )
             # print(stress)
             # wp.printf("tmp: %s\n", tmp)
-        if model.material == 7:
+        if model.material[p] == 7:
             stress = kirchoff_stress_neoHookeanBoarden(
                 state.particle_F[p], U, V, J, sig, model.mu[p], model.lam[p], kappa, state
             )
             
-        if model.material == 1:
+        if model.material[p] == 1:
             stress = kirchoff_stress_StVK(
                 state.particle_F[p], U, V, sig, model.mu[p], model.lam[p]
             )
-        if model.material == 2:
+        if model.material[p] == 2:
             stress = kirchoff_stress_drucker_prager(
                 state.particle_F[p], U, V, sig, model.mu[p], model.lam[p]
             )
-        if model.material == 3:
+        if model.material[p] == 3:
             # temporarily use stvk, subject to change
             stress = kirchoff_stress_StVK(
                 state.particle_F[p], U, V, sig, model.mu[p], model.lam[p]

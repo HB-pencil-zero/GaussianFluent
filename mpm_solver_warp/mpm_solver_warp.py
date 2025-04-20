@@ -40,7 +40,7 @@ class MPM_Simulator_WARP:
         self.mpm_model.update_cov_with_F = False
 
         # material is used to switch between different elastoplastic models. 0 is jelly
-        self.mpm_model.material = 0
+        self.mpm_model.material = wp.zeros(shape=n_particles, dtype=int, device=device)
 
         self.mpm_model.plastic_viscosity = 0.0
         self.mpm_model.softening = 0.1
@@ -252,22 +252,42 @@ class MPM_Simulator_WARP:
     def set_parameters(self, device="cuda:0", **kwargs):
         self.set_parameters_dict(device, kwargs)
 
+    
+    def material_2_num(self, material):
+        if material == "jelly":
+            return 0
+        elif material == "metal":
+            return 1
+        elif material == "sand":
+            return 2
+        elif material == "foam":
+            return 3
+        elif material == "snow":
+            return 4
+        elif material == "plasticine":
+            return 5
+        elif material == "watermelon":
+            return 7
+        else:
+            raise TypeError("Undefined material type")
+    
+    
     def set_parameters_dict(self, kwargs={}, device="cuda:0"):
         if "material" in kwargs:
             if kwargs["material"] == "jelly":
-                self.mpm_model.material = 0
+                self.mpm_model.material = wp.zeros(shape=self.n_particles, dtype=int, device=device)
             elif kwargs["material"] == "metal":
-                self.mpm_model.material = 1
+                self.mpm_model.material = wp.full(shape=self.n_particles, value=1, dtype=int, device=device)
             elif kwargs["material"] == "sand":
-                self.mpm_model.material = 2
+                self.mpm_model.material = wp.full(shape=self.n_particles, value=2, dtype=int, device=device)
             elif kwargs["material"] == "foam":
-                self.mpm_model.material = 3
+                self.mpm_model.material = wp.full(shape=self.n_particles, value=3, dtype=int, device=device)
             elif kwargs["material"] == "snow":
-                self.mpm_model.material = 4
+                self.mpm_model.material = wp.full(shape=self.n_particles, value=4, dtype=int, device=device)
             elif kwargs["material"] == "plasticine":
-                self.mpm_model.material = 5
+                self.mpm_model.material = wp.full(shape=self.n_particles, value=5, dtype=int, device=device)
             elif kwargs["material"] == "watermelon":
-                self.mpm_model.material = 7
+                self.mpm_model.material = wp.full(shape=self.n_particles, value=7, dtype=int, device=device)
             else:
                 raise TypeError("Undefined material type")
 
@@ -327,7 +347,12 @@ class MPM_Simulator_WARP:
         if "xi" in kwargs:
             self.mpm_model.xi = kwargs["xi"]
         if "beta" in kwargs:
-            self.mpm_model.beta = kwargs["beta"]
+            self.mpm_model.beta = wp.full( 
+                shape=self.n_particles,
+                value=kwargs["beta"],
+                dtype=wp.float32,
+                device=device
+            )
         if "friction_angle" in kwargs:
             self.mpm_model.friction_angle = kwargs["friction_angle"]
             sin_phi = wp.sin(self.mpm_model.friction_angle / 180.0 * 3.14159265)
@@ -400,7 +425,7 @@ class MPM_Simulator_WARP:
             device=device,
         )
 
-    def p2g2p(self, step, dt, device="cuda:0"):
+    def p2g2p(self, step, dt, device="cuda:0" , flip_pic_ratio: float = 0.80):
         grid_size = (
             self.mpm_model.grid_dim_x,
             self.mpm_model.grid_dim_y,
@@ -510,7 +535,7 @@ class MPM_Simulator_WARP:
                 # kernel=g2p,
                 kernel=g2p_flip,
                 dim=self.n_particles,
-                inputs=[self.mpm_state, self.mpm_model, dt],
+                inputs=[self.mpm_state, self.mpm_model, dt, flip_pic_ratio],
                 device=device,
             )  # x, v, C, F_trial are updated
 

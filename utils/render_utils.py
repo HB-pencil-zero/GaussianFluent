@@ -24,7 +24,7 @@ from scene.cameras import Camera as GSCamera
 from gaussian_renderer import render, GaussianModel
 from utils.system_utils import searchForMaxIteration
 from utils.graphics_utils import focal2fov
-
+from utils.render_utils import * 
 
 def initialize_resterize(
     viewpoint_camera,
@@ -127,4 +127,9 @@ def convert_SH(
     sh2rgb = eval_sh(pc.active_sh_degree, shs_view, dir_pp_normalized)
     colors_precomp = torch.clamp_min(sh2rgb + 0.5, 0.0)
 
+    # valid_indice = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos_valid_indice.npy")).to("cuda")
+    # colors = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/phong_colors.npy")).to("cuda").reshape(-1 , 3).float()
+    # colors_precomp[valid_indice] = colors
     return colors_precomp
+
+
