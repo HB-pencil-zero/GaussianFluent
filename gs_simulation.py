@@ -10,7 +10,7 @@ import os
 import numpy as np
 import json
 from tqdm import tqdm
-
+import subprocess
 # Gaussian splatting dependencies
 from utils.sh_utils import eval_sh
 from scene.gaussian_model import GaussianModel
@@ -43,6 +43,61 @@ wp.init()
 wp.config.verify_cuda = True
 
 ti.init(arch=ti.cuda, device_memory_GB=4.0, random_seed=42)
+
+import sys # 导入 sys 模块以使用 sys.stdout.flush()
+
+def run_command_realtime(command_to_run):
+    """
+    执行一个 shell 命令并实时打印其标准输出和标准错误。
+
+    Args:
+        command_to_run (str): 要执行的 shell 命令。
+
+    Returns:
+        int: 子进程的退出码。
+    """
+    print(f"--- 开始执行命令: {command_to_run} ---")
+    try:
+        # 使用 Popen 启动子进程
+        # 将 stderr 重定向到 stdout (2>&1)
+        # text=True 使 stdout/stderr 成为文本流
+        # bufsize=1 设置为行缓冲模式（如果可能）
+        # encoding='utf-8' 明确指定编码
+        process = subprocess.Popen(
+            ["bash", "-c", f"{command_to_run} 2>&1"], # 将 stderr 合并到 stdout
+            stdout=subprocess.PIPE,
+            # stderr=subprocess.PIPE, # 不再需要单独处理 stderr
+            text=True,
+            bufsize=1,
+            encoding='utf-8',
+            errors='replace' # 处理潜在的解码错误
+        )
+
+        # 实时读取 stdout 流
+        if process.stdout:
+            # 使用 iter 和 readline 逐行读取，直到流结束
+            for line in iter(process.stdout.readline, ''):
+                print(line, end='') # 打印读取到的行，end='' 避免额外换行
+                sys.stdout.flush() # 强制刷新缓冲区，确保立即显示
+
+        # 等待子进程结束
+        process.wait()
+
+        # 检查子进程的退出码
+        return_code = process.returncode
+        print(f"\n--- 命令执行完毕，退出码: {return_code} ---")
+        if return_code != 0:
+            print(f"警告：命令执行可能出错，退出码为 {return_code}")
+
+        return return_code
+
+    except FileNotFoundError:
+        print(f"错误：无法找到 'bash' 命令或指定的程序。请检查路径和环境。")
+        return -1
+    except Exception as e:
+        print(f"执行命令时发生错误: {e}")
+        return -1
+
 
 class PipelineParamsNoparse:
     """Same as PipelineParams but without argument parser."""
@@ -256,6 +311,11 @@ if __name__ == "__main__":
     mask2 = (gaussians._features_dc > -2.5).all(axis=2).cpu().numpy().squeeze()
     mask = mask1 & mask2
     selected_xyz = gaussians._xyz[mask]
+    mask1 = (gaussians._features_dc > 1.0).all(axis=2).cpu().numpy().squeeze()
+    mask2 = (gaussians._features_dc < 4).all(axis=2).cpu().numpy().squeeze()
+    mask__ = mask1 & mask2
+    selected_xyz2 = gaussians._xyz[mask]
+    
     
 
     # 2. 创建KNN搜索器
@@ -276,6 +336,8 @@ if __name__ == "__main__":
     
     
     beta[new_mask.cpu().numpy()] = 3000
+    beta[mask__] = 2
+    
     mpm_solver.mpm_model.beta.assign(beta)
     
     
@@ -285,7 +347,7 @@ if __name__ == "__main__":
 
     mpm_solver.finalize_mu_lam()
 
-    mpm_solver.import_particle_v_from_torch(torch.zeros(mpm_init_pos.shape[0], 3, device='cuda').add_(torch.tensor([0.0, 0.0, -6.0], device='cuda')))
+    mpm_solver.import_particle_v_from_torch(torch.zeros(mpm_init_pos.shape[0], 3, device='cuda').add_(torch.tensor([0.0, 0.0, 0.0], device='cuda')))
     # camera setting
     mpm_space_viewpoint_center = (
         torch.tensor(camera_params["mpm_space_viewpoint_center"]).reshape((1, 3)).cuda()
@@ -339,6 +401,9 @@ if __name__ == "__main__":
     ti.reset()
     # torch.cuda.empty_cache()
     color_flag = False
+    # color_flag = True
+    light_flag = True
+    end_frame = 22
     for frame in tqdm(range(frame_num)):
         current_camera = get_camera_view(
             model_path,
@@ -360,7 +425,7 @@ if __name__ == "__main__":
         )
 
         for step in range(step_per_frame):
-            mpm_solver.p2g2p(step, substep_dt, device=device)
+            mpm_solver.p2g2p(step, substep_dt, device=device, flip_pic_ratio=material_params['flip_pic_ratio'])
 
         if args.output_ply or args.output_h5:
             save_data_at_frame(
@@ -396,10 +461,37 @@ if __name__ == "__main__":
 
             colors_precomp = convert_SH(shs, current_camera, gaussians, pos, rot)
             if color_flag:
+                if  light_flag : 
+                    np.save("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos.npy", pos.detach().cpu().numpy())
+                    command = 'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python normal_vector_proc_nan.py'
+                    run_command_realtime(command)
+                    # process = subprocess.Popen(
+                    #     ["bash", "-c", command],
+                    #     stdout=subprocess.PIPE,
+                    #     stderr=subprocess.PIPE,
+                    #     text=True
+                    # )
+                    # # 获取输出
+                    # stdout, stderr = process.communicate()
+
+                    command = 'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python phong_model_wm_shs_15.py'
+                    run_command_realtime(command)
+                    # process = subprocess.Popen(
+                    #     ["bash", "-c", command],
+                    #     stdout=subprocess.PIPE,
+                    #     stderr=subprocess.PIPE,
+                    #     text=True
+                    # )
+                    # # 获取输出
+                    # stdout, stderr = process.communicate()
+
+
+                # pos = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos.npy")).to("cuda")
                 valid_indice = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos_valid_indice.npy")).to("cuda")
                 colors = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/phong_colors.npy")).to("cuda").reshape(-1 , 3).float()
                 colors_precomp[valid_indice] = colors
-            rendering, raddi, _ = rasterize(
+                # pos[valid_indice] = pos_tmp
+            rendering, raddi, point_xy = rasterize(
                 means3D=pos,
                 means2D=init_screen_points,
                 shs=None,
@@ -409,6 +501,15 @@ if __name__ == "__main__":
                 rotations=None,
                 cov3D_precomp=cov3D,
             )
+            # # 假设原始tensor是BGR格式，形状为[C, H, W]
+            # rgb_tensor = rendering.clone()  # 克隆以避免修改原始数据
+            # # 交换BGR通道为RGB (假设通道顺序为[B,G,R])
+            # rgb_tensor = rgb_tensor[[2, 1, 0], :, :].permute(1,2,0).detach().cpu().numpy()  # 直接重排通道而不是permute维度 
+            # cv2.imwrite(
+            #     "test.png",
+            #     255 * rgb_tensor,
+            # )
+            
             cv2_img = rendering.permute(1, 2, 0).detach().cpu().numpy()
             cv2_img = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
             if height is None or width is None:
@@ -419,9 +520,11 @@ if __name__ == "__main__":
                 os.path.join(args.output_path, f"{frame}.png".rjust(8, "0")),
                 255 * cv2_img,
             )
-
+            if frame > end_frame:
+                light_flag = False
     if args.render_img and args.compile_video:
         fps = int(1.0 / time_params["frame_dt"])
         os.system(
             f"ffmpeg -framerate {fps} -i {args.output_path}/%04d.png -c:v libx264 -s {width}x{height} -y -pix_fmt yuv420p {args.output_path}/output.mp4"
         )
+

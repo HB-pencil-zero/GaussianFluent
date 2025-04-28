@@ -29,6 +29,10 @@ def decode_param_json(json_file):
     else:
         material_params["beta"] = 2
     
+    if "flip_pic_ratio" in sim_params.keys():
+        material_params['flip_pic_ratio'] = sim_params["flip_pic_ratio"]
+    else:
+        material_params["flip_pic_ratio"] = 0.80
     
     if "nu" in sim_params.keys():
         material_params["nu"] = sim_params["nu"]
