@@ -10,7 +10,7 @@
     "frame_dt": 3e-2,
     "frame_num": 300,
     "E": 2e3,
-    "nu": 0.37,
+    "nu": 0.38,
     "friction_angle": 45.0,
     "beta": 1.2,
     "xi": 3.0,

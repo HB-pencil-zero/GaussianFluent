@@ -24,7 +24,7 @@ from scene.cameras import Camera as GSCamera
 from gaussian_renderer import render, GaussianModel
 from utils.system_utils import searchForMaxIteration
 from utils.graphics_utils import focal2fov
-
+from utils.shadow_utils import *
 # MPM dependencies
 from mpm_solver_warp.engine_utils import *
 from mpm_solver_warp.mpm_solver_warp import MPM_Simulator_WARP
@@ -38,6 +38,7 @@ from utils.decode_param import *
 from utils.transformation_utils import *
 from utils.camera_view_utils import *
 from utils.render_utils import *
+from utils.lighting_utils import *
 
 wp.init()
 wp.config.verify_cuda = True
@@ -423,6 +424,26 @@ if __name__ == "__main__":
         rasterize = initialize_resterize(
             current_camera, gaussians, pipeline, background
         )
+        
+        
+        current_camera2 = get_camera_view(
+            model_path,
+            default_camera_index=camera_params["default_camera_index"],
+            center_view_world_space=viewpoint_center_worldspace,
+            observant_coordinates=observant_coordinates,
+            show_hint=camera_params["show_hint"],
+            init_azimuthm=camera_params["init_azimuthm"],
+            init_elevation=90,
+            init_radius=3,
+            move_camera=camera_params["move_camera"],
+            current_frame=frame,
+            delta_a=camera_params["delta_a"],
+            delta_e=camera_params["delta_e"],
+            delta_r=camera_params["delta_r"],
+        )
+        rasterize2 = initialize_resterize(
+            current_camera2, gaussians, pipeline, background
+        )
 
         for step in range(step_per_frame):
             mpm_solver.p2g2p(step, substep_dt, device=device, flip_pic_ratio=material_params['flip_pic_ratio'])
@@ -464,7 +485,7 @@ if __name__ == "__main__":
                 if  light_flag : 
                     np.save("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos.npy", pos.detach().cpu().numpy())
                     command = 'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python normal_vector_proc_nan.py'
-                    run_command_realtime(command)
+                    # run_command_realtime(command)
                     # process = subprocess.Popen(
                     #     ["bash", "-c", command],
                     #     stdout=subprocess.PIPE,
@@ -475,7 +496,7 @@ if __name__ == "__main__":
                     # stdout, stderr = process.communicate()
 
                     command = 'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python phong_model_wm_shs_15.py'
-                    run_command_realtime(command)
+                    # run_command_realtime(command)
                     # process = subprocess.Popen(
                     #     ["bash", "-c", command],
                     #     stdout=subprocess.PIPE,
@@ -489,8 +510,37 @@ if __name__ == "__main__":
                 # pos = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos.npy")).to("cuda")
                 valid_indice = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos_valid_indice.npy")).to("cuda")
                 colors = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/phong_colors.npy")).to("cuda").reshape(-1 , 3).float()
-                colors_precomp[valid_indice] = colors
+                # colors_precomp[valid_indice] = colors
                 # pos[valid_indice] = pos_tmp
+
+            
+            rendering2, raddi2, point_xy2 = rasterize2(
+                means3D=pos,
+                means2D=init_screen_points,
+                shs=None,
+                colors_precomp=colors_precomp,
+                opacities=opacity,
+                scales=None,
+                rotations=None,
+                cov3D_precomp=cov3D,
+            )
+            
+            # shadow = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/shadow_factors_shdw1_bs100_eps0p001_align0p999_ign1.npy")).squeeze().bool()
+            normal = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/N_norm_corrected_shdw1_bs100_eps0p001_align0p999_ign1.npy"))
+            light_bool_mask = calculate_occlusion_map_light_dist_angle_cuda(
+                pos,
+                point_xy2,
+                current_camera2.camera_center
+            )
+            
+            colors_precomp = apply_phong_lighting_to_gaussians_with_mask(
+                gaussian_model = gaussians,
+                viewpoint_camera = current_camera2,
+                is_lit_mask = light_bool_mask,
+                normals_override = normal 
+            )
+            
+            
             rendering, raddi, point_xy = rasterize(
                 means3D=pos,
                 means2D=init_screen_points,
@@ -501,14 +551,7 @@ if __name__ == "__main__":
                 rotations=None,
                 cov3D_precomp=cov3D,
             )
-            # # 假设原始tensor是BGR格式，形状为[C, H, W]
-            # rgb_tensor = rendering.clone()  # 克隆以避免修改原始数据
-            # # 交换BGR通道为RGB (假设通道顺序为[B,G,R])
-            # rgb_tensor = rgb_tensor[[2, 1, 0], :, :].permute(1,2,0).detach().cpu().numpy()  # 直接重排通道而不是permute维度 
-            # cv2.imwrite(
-            #     "test.png",
-            #     255 * rgb_tensor,
-            # )
+            
             
             cv2_img = rendering.permute(1, 2, 0).detach().cpu().numpy()
             cv2_img = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)

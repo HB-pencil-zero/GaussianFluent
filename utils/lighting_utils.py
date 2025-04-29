@@ -39,210 +39,265 @@ def reflect_vectors_batch(incident, normal):
     reflected = incident - 2.0 * dot_nl * normal # Standard reflection formula: I - 2 * dot(N, I) * N
     return reflected
 
-# --- 修改后的 convert_SH 函数 ---
-def convert_SH_with_lighting(
-    shs_view,                   # 输入的 SH 系数 (N, C, num_coeffs) 或类似形状
+
+import torch # 确保 torch 已导入
+
+# --- 假设这些辅助函数已定义 ---
+def normalize_batch(x):
+    # Placeholder: 实现批量归一化
+    return torch.nn.functional.normalize(x, p=2, dim=-1)
+
+def dot_product_batch(a, b):
+    # Placeholder: 实现批量点积
+    return torch.sum(a * b, dim=-1)
+
+
+# --- 假设这些辅助函数已定义 ---
+def normalize_batch(x):
+    # Placeholder: 实现批量归一化
+    return torch.nn.functional.normalize(x, p=2, dim=-1)
+
+def dot_product_batch(a, b):
+    # Placeholder: 实现批量点积
+    return torch.sum(a * b, dim=-1)
+
+def reflect_vectors_batch(incident, normal):
+    # Placeholder: 实现批量反射向量计算 R = I - 2 * (N dot I) * N
+    # 注意：这里的 incident 通常是光线方向 L，但公式常用 I
+    # R = L - 2 * dot_product_batch(normal, L).unsqueeze(1) * normal
+    # 如果 L 是从点指向光源，入射向量应该是 -L
+    neg_L = -incident
+    dot_nl = dot_product_batch(normal, neg_L)
+    # 确保法线和入射向量指向同一侧时才反射 (dot_nl > 0)
+    # 或者更标准的做法是不检查，直接用公式
+    reflected = neg_L - 2 * dot_nl.unsqueeze(1) * normal
+    return reflected
+
+
+# --- 修改后的函数，接收 is_lit_mask 并添加衰减 ---
+def apply_phong_lighting_to_gaussians_with_mask(
+    gaussian_model,             # GaussianModel 对象实例
     viewpoint_camera,           # 相机对象，需要 .camera_center
-    pc,                         # GaussianModel 对象，需要 .max_sh_degree, .active_sh_degree, 并且 *假设* 有法线
-    position: torch.Tensor,     # 点的位置 (N, 3)
-    normals: torch.Tensor,      # 点的法向量 (N, 3) - **必须提供**
-    light_source: dict,         # 光源参数 (包含 position, ambient, diffuse, specular)
-    material_phong: dict,       # 材质参数 (包含 specular_color, shininess)
-    rotation: torch.Tensor = None, # 可选的旋转
+    is_lit_mask: torch.Tensor,  # 布尔张量 (N,)，True 表示被照亮
+    # 可选：覆盖从模型获取的法线
+    normals_override: torch.Tensor = None,
+    light_source: dict = {
+        'position': [0.0, 0.0, 3.0],   # 光源位置
+        'ambient': [0.6, 0.6, 0.6],   # 环境光强度
+        'diffuse': [0.4, 0.4, 0.4],   # 漫反射光强度
+        'specular': [0.2, 0.2, 0.2]   # 镜面反射光强度
+    },
+    material_phong: dict = {
+        'specular_color': [0.8, 0.8, 0.8], # 镜面反射颜色/系数 (白色高光)
+        'shininess': 32.0             # 高光指数
+    },
+    attenuation_constant: float = 10.0, # 光强衰减公式中的常数 (参考代码默认5.0)
+    rotation: torch.Tensor = None,     # 可选的旋转
+    return_cpu: bool = False           # 是否将最终结果返回到CPU (默认不返回)
 ):
     """
-    使用球谐函数计算基础颜色，并应用Phong光照模型。
+    从 GaussianModel 获取数据，计算基础颜色，并应用带衰减和外部阴影遮罩的Phong光照模型。
 
     Args:
-        shs_view: 球谐系数张量。
+        gaussian_model: GaussianModel 实例，需要提供 ._features_dc, .get_xyz(), .get_normals()。
         viewpoint_camera: 包含相机中心信息的相机对象。
-        pc: GaussianModel 实例。
-        position: 高斯点中心位置 (N, 3)。
-        normals: 每个高斯点的法向量 (N, 3)，必须在同一设备上。
+        is_lit_mask: 布尔张量 (N,)，标记每个点是否被光源照亮 (True=亮, False=阴影)。
+                     必须与 gaussian_model 中的点数匹配。
+        normals_override: 可选，如果提供，则使用此法线张量代替从 gaussian_model 获取的法线。
         light_source: 包含光源属性的字典。
         material_phong: 包含镜面材质属性的字典。
+        attenuation_constant: 光照距离衰减的常数。设置为 0 或负数可禁用衰减。
         rotation: 可选的旋转矩阵。
+        return_cpu: 是否将最终结果从 GPU 移回 CPU (如果使用了 GPU)。
 
     Returns:
-        最终的 Phong 着色颜色 (N, 3)，范围在 [0, 1]。
+        Tensor or ndarray: 计算得到的颜色 (N, 3)，根据 return_cpu 决定类型。
+
+    Raises:
+        AttributeError: 如果 gaussian_model 缺少必要的属性或方法。
+        ValueError: 如果获取的数据形状或 is_lit_mask 形状不兼容。
+        TypeError: 如果输入类型不正确。
     """
+    overall_start_time = time.time()
+    print("开始 Phong 计算 (使用外部光照遮罩)...")
+
+    # --- 从 gaussian_model 获取数据 ---
+    try:
+        features_dc_input = gaussian_model._features_dc
+        position = gaussian_model.get_xyz
+        # 获取法线 - 优先使用 override，否则从模型获取
+        if normals_override is not None:
+            normals = normals_override
+        elif hasattr(gaussian_model, 'get_normals'):
+             normals = gaussian_model.get_normals()
+             if not isinstance(normals, torch.Tensor):
+                 raise TypeError("gaussian_model.get_normals() did not return a torch.Tensor")
+        elif hasattr(gaussian_model, 'normals'):
+             normals = gaussian_model.normals
+             if not isinstance(normals, torch.Tensor):
+                 raise TypeError("gaussian_model.normals is not a torch.Tensor")
+        else:
+            raise AttributeError("gaussian_model does not have 'get_normals()' method or 'normals' attribute, and normals_override was not provided.")
+
+    except AttributeError as e:
+        raise AttributeError(f"gaussian_model is missing required attribute/method: {e}")
+
+    # --- 检查获取的数据类型 ---
+    if not isinstance(features_dc_input, torch.Tensor):
+        raise TypeError("gaussian_model._features_dc must be a torch.Tensor")
+    if not isinstance(position, torch.Tensor):
+        raise TypeError("gaussian_model.get_xyz must be a torch.Tensor")
+    if not isinstance(normals, torch.Tensor):
+         raise TypeError("Normals must be a torch.Tensor")
+    if not isinstance(is_lit_mask, torch.Tensor):
+        raise TypeError("is_lit_mask must be a torch.Tensor")
+    if is_lit_mask.dtype != torch.bool:
+        raise TypeError("is_lit_mask must be a boolean tensor (torch.bool)")
+
     num_points = position.shape[0]
     device = position.device # 获取张量所在的设备
+    print(f"使用设备: {device}, 总点数 N={num_points}")
 
-    # 1. 计算基础颜色 (来自 SH) - 作为 ka 和 kd
-    # 调整 shs_view 形状以匹配 eval_sh 的期望输入
-    # 原始代码: shs_view.transpose(1, 2).view(-1, 3, (pc.max_sh_degree + 1) ** 2)
-    # 假设 shs_view 已经是 (N, C, num_coeffs) 或类似形式， C=3
-    # 确保形状是 (N, 3, num_coeffs)
-    if shs_view.shape[1] != 3:
-         # 如果通道不在第二个维度，尝试调整
-         # 例如，如果输入是 (N, num_coeffs, 3)，则转置
-         if shs_view.shape[2] == 3:
-             shs_view = shs_view.transpose(1, 2)
-         else:
-             raise ValueError(f"无法处理的 shs_view 形状: {shs_view.shape}")
+    # --- 检查 is_lit_mask 形状 ---
+    if is_lit_mask.shape != (num_points,):
+        raise ValueError(f"is_lit_mask shape ({is_lit_mask.shape}) must match number of points ({num_points}). Expected shape ({num_points},).")
 
-    # 确保 shs_view 覆盖了正确的点数
-    if shs_view.shape[0] != num_points:
-         # 可能需要根据 position 的子集来索引 shs_view
-         # 或者检查输入是否匹配
-         raise ValueError(f"shs_view ({shs_view.shape[0]}) 和 position ({num_points}) 的点数不匹配")
+    # --- 确保所有必要张量在同一设备 ---
+    print("准备数据并传输到设备 (如果需要)...")
+    transfer_start_time = time.time()
+    features_dc_input = features_dc_input.to(device)
+    normals = normals.to(device)
+    is_lit_mask = is_lit_mask.to(device) # 移动 mask 到设备
+    if rotation is not None: rotation = rotation.to(device)
+    print(f"数据准备和传输耗时: {time.time() - transfer_start_time:.4f} 秒")
 
+    # 1. 计算基础颜色 (来自 DC 特征)
+    if features_dc_input.shape[0] != num_points:
+         raise ValueError(f"features_dc_input ({features_dc_input.shape[0]}) and position ({num_points}) point counts from gaussian_model do not match.")
 
-    # 计算视线方向 (从点指向相机)
-    view_dir = viewpoint_camera.camera_center.repeat(num_points, 1) - position
-    # --- 处理可选旋转 ---
-    if rotation is not None:
-        # 假设 rotation 作用于 view_dir (或者根据具体语义调整)
-        # 原始代码是作用于 dir_pp = position - center，这里我们作用于 view_dir = center - position
-        n_rot = rotation.shape[0]
-        if n_rot > num_points: n_rot = num_points # 确保索引不越界
-        # 注意：原始代码的旋转逻辑可能需要根据具体坐标系和旋转含义调整
-        # 这里假设旋转应用于世界坐标下的 view_dir
-        view_dir[:n_rot] = torch.matmul(rotation, view_dir[:n_rot].unsqueeze(2)).squeeze(2)
+    if features_dc_input.ndim == 3 and features_dc_input.shape[1] == 1 and features_dc_input.shape[2] == 3:
+        features_dc = features_dc_input.squeeze(1) # (N, 1, 3) -> (N, 3)
+    elif features_dc_input.ndim == 2 and features_dc_input.shape[1] == 3:
+        features_dc = features_dc_input # Already (N, 3)
+    else:
+        raise ValueError(f"Incompatible features_dc shape from gaussian_model: {features_dc_input.shape}. Expected (N, 1, 3) or (N, 3).")
 
-    view_dir_normalized = normalize_batch(view_dir) # V in Phong (points to camera)
-
-    # 使用 eval_sh 计算基础颜色
-    # 注意：eval_sh 需要的方向通常是从相机指向点，即 -view_dir_normalized
-    # 或者，如果 eval_sh 期望的是从点指向相机的方向，则直接用 view_dir_normalized
-    # 假设 eval_sh 期望的是从相机指向点的方向 (dir_pp_normalized in original code)
-    dir_pp_normalized = -view_dir_normalized
-    sh2rgb = eval_sh(pc.active_sh_degree, shs_view, dir_pp_normalized)
-    base_color = torch.clamp_min(sh2rgb + 0.5, 0.0) # (N, 3) - 这将用作 Ka 和 Kd
+    C0 = 0.28209479177387814
+    base_color = torch.clamp(features_dc * C0 + 0.5, 0.0, 1.0) # (N, 3)
 
     # 2. 准备 Phong 计算所需的向量和参数
-    N = normalize_batch(normals) # 归一化法向量 (N, 3)
-    V = view_dir_normalized      # 视线向量 (N, 3)
+    print("计算基础光照向量和参数...")
+    calc_start_time = time.time()
+    N_norm_original = normalize_batch(normals) # (N, 3) - 存储原始归一化法线
 
+    # 光源参数
     light_pos = torch.tensor(light_source['position'], dtype=torch.float32, device=device)
-    light_ambient_color = torch.tensor(light_source['ambient'], dtype=torch.float32, device=device) # Ia
-    light_diffuse_color = torch.tensor(light_source['diffuse'], dtype=torch.float32, device=device) # Id
-    light_specular_color = torch.tensor(light_source['specular'], dtype=torch.float32, device=device) # Is
+    light_ambient = torch.tensor(light_source['ambient'], dtype=torch.float32, device=device)
+    light_diffuse = torch.tensor(light_source['diffuse'], dtype=torch.float32, device=device)
+    light_specular = torch.tensor(light_source['specular'], dtype=torch.float32, device=device)
 
-    mat_ambient_color = base_color  # Ka (N, 3)
-    mat_diffuse_color = base_color  # Kd (N, 3)
-    mat_specular_color = torch.tensor(material_phong['specular_color'], dtype=torch.float32, device=device) # Ks (3,)
-    mat_shininess = material_phong['shininess'] # n (scalar)
+    # 材质参数
+    mat_specular = torch.tensor(material_phong['specular_color'], dtype=torch.float32, device=device)
+    mat_shininess = float(material_phong['shininess'])
 
-    # 计算光照方向向量 (从点指向光源)
+    # 计算光照方向向量 (从点指向光源) 和距离
     L_vec = light_pos.unsqueeze(0) - position # (N, 3)
+    distance_sq = torch.sum(L_vec**2, dim=1, keepdim=True) # (N, 1)
+    distance_sq = torch.clamp(distance_sq, min=1e-6) # 避免除零
+    # distance_to_light = torch.sqrt(distance_sq) # (N, 1) - 如果需要实际距离
     L = normalize_batch(L_vec) # (N, 3)
 
-    # 3. 计算 Phong 光照分量
-
-    # 环境光
-    ambient_term = mat_ambient_color * light_ambient_color # (N, 3) * (3,) -> (N, 3)
-
-    # 漫反射
-    dot_nl = torch.clamp(dot_product_batch(N, L), min=0.0) # max(0, N dot L)
-    diffuse_term = mat_diffuse_color * light_diffuse_color * dot_nl.unsqueeze(1) # (N, 3) * (3,) * (N, 1) -> (N, 3)
-
-    # 镜面反射
-    # R = reflect_vectors_batch(L, N) # R = reflect(-L, N)
-    # Phong Blinn 优化：使用半程向量 H = normalize(L + V)
-    H = normalize_batch(L + V) # (N, 3)
-    dot_nh = torch.clamp(dot_product_batch(N, H), min=0.0) # max(0, N dot H)
-
-    # 检查 shininess 是否大于 0
-    if mat_shininess > 0:
-        specular_intensity = torch.pow(dot_nh, mat_shininess) # (N,)
+    # 计算视线方向向量
+    cam_center_tensor = viewpoint_camera.camera_center
+    if not isinstance(cam_center_tensor, torch.Tensor):
+        cam_center_tensor = torch.tensor(cam_center_tensor, dtype=position.dtype, device=device)
     else:
-        # 处理 shininess 为 0 或负数的情况 (例如，禁用镜面反射)
-        specular_intensity = torch.zeros_like(dot_nh) # (N,)
+        cam_center_tensor = cam_center_tensor.to(device=device, dtype=position.dtype)
 
-    specular_term = mat_specular_color * light_specular_color * specular_intensity.unsqueeze(1) # (3,) * (3,) * (N, 1) -> (N, 3)
+    if cam_center_tensor.ndim == 1: cam_center_tensor = cam_center_tensor.unsqueeze(0)
+    if cam_center_tensor.shape[0] == 1 and num_points > 1:
+         view_dir = cam_center_tensor.repeat(num_points, 1) - position
+    elif cam_center_tensor.shape[0] == num_points:
+         view_dir = cam_center_tensor - position
+    else:
+         raise ValueError(f"viewpoint_camera.camera_center shape ({cam_center_tensor.shape}) incompatible with position ({position.shape}).")
 
-    # 4. 合并光照分量
-    final_colors = ambient_term + diffuse_term + specular_term
+    if rotation is not None:
+        n_rot = rotation.shape[0]
+        if n_rot > num_points: n_rot = num_points
+        view_dir[:n_rot] = torch.matmul(rotation, view_dir[:n_rot].unsqueeze(2)).squeeze(2)
 
-    # 5. 钳制到 [0, 1] 范围
-    final_colors = torch.clamp(final_colors, 0.0, None)
+    V = normalize_batch(view_dir)      # (N, 3)
 
-    return final_colors
+    # --- 3. 法线翻转 (基于 is_lit_mask) ---
+    # 仅对被照亮的点，如果其原始法线背离光源，则翻转法线用于后续计算
+    dot_nl_initial = torch.sum(N_norm_original * L, dim=1) # (N,)
+    needs_flip = (dot_nl_initial < 0.0)                   # (N,)
+    flip_mask = is_lit_mask & needs_flip                  # (N,) 布尔掩码
 
-# --- 示例用法 (需要填充 GaussianModel 和 Camera) ---
-if __name__ == '__main__':
-    # --- 假设你已经加载了 GaussianModel (pc) 和 viewpoint_camera ---
-    class MockGaussianModel:
-        def __init__(self, num_points, device):
-            self.max_sh_degree = 3
-            self.active_sh_degree = 3
-            # **关键**: 假设模型有法线属性，或者你需要从其他地方加载
-            # self.normals = torch.randn(num_points, 3, device=device)
-            # self.normals = F.normalize(self.normals, p=2, dim=1)
-            print(f"警告: MockGaussianModel 使用随机 SH 系数和法线。")
-            # 假设 SH 系数已经提取并放到了 GPU
-            num_sh_coeffs = (self.max_sh_degree + 1)**2
-            self.shs_view = torch.randn(num_points, 3, num_sh_coeffs, device=device) * 0.1 # 模拟 SH 系数
+    N_norm = torch.where(flip_mask.unsqueeze(1), -N_norm_original, N_norm_original) # (N, 3)
 
-    class MockCamera:
-        def __init__(self, pos, device):
-            self.camera_center = torch.tensor(pos, dtype=torch.float32, device=device)
+    num_flipped = torch.sum(flip_mask).item()
+    if num_flipped > 0:
+        print(f"信息: {num_flipped} 个被照亮点的法线因点积为负而被翻转以进行光照计算。")
 
-    # --- 模拟数据 ---
-    N_POINTS = 10000
-    mock_pc = MockGaussianModel(N_POINTS, device)
-    mock_camera = MockCamera([0.0, 0.0, 5.0], device) # 观察者位置
+    # --- 4. 计算 Phong 光照分量 (使用可能修正过的 N_norm) ---
+    # 计算反射向量 R (使用修正后的 N_norm)
+    R = reflect_vectors_batch(L, N_norm) # (N, 3)
+    R = normalize_batch(R) # 确保 R 是单位向量
 
-    # 模拟点的位置和法线 (确保在 GPU 上)
-    mock_positions = torch.randn(N_POINTS, 3, device=device) * 0.5 # 假设点云在原点附近
-    mock_normals = torch.randn(N_POINTS, 3, device=device) # 随机法线
-    mock_normals = normalize_batch(mock_normals) # 归一化
+    # 环境光 (不受阴影和衰减影响)
+    ambient_term = base_color * light_ambient # (N, 3)
 
-    # --- 定义光源和材质 ---
-    light = {
-        'position': [2.0, 3.0, 4.0],   # 光源位置
-        'ambient': [0.1, 0.1, 0.1],   # 环境光强度/颜色
-        'diffuse': [0.8, 0.8, 0.8],   # 漫反射光强度/颜色
-        'specular': [1.0, 1.0, 1.0]   # 镜面反射光强度/颜色
-    }
-    material = {
-        'specular_color': [0.9, 0.9, 0.9], # 镜面反射颜色 (Ks)
-        'shininess': 32.0             # 高光系数 (n)
-    }
+    # 漫反射基础贡献
+    diffuse_intensity = torch.clamp(dot_product_batch(N_norm, L), min=0.0) # (N,)
+    diffuse_base = base_color * light_diffuse * diffuse_intensity.unsqueeze(1) # (N, 3)
 
-    # --- 调用函数 ---
-    start_time = time.time()
-    print("正在计算带光照的颜色...")
-    final_point_colors = convert_SH_with_lighting(
-        mock_pc.shs_view, # 从模拟模型获取 SH
-        mock_camera,
-        mock_pc,
-        mock_positions,
-        mock_normals,      # 传入模拟的法线
-        light,
-        material
-    )
-    end_time = time.time()
-    print(f"计算完成，耗时: {end_time - start_time:.4f} 秒")
-    print("输出颜色张量形状:", final_point_colors.shape) # 应为 (N_POINTS, 3)
+    # 镜面反射基础贡献
+    dot_rv = torch.clamp(dot_product_batch(R, V), min=0.0) # (N,)
+    if mat_shininess > 0:
+        specular_intensity = torch.pow(dot_rv, mat_shininess) # (N,)
+    else:
+        specular_intensity = torch.zeros_like(dot_rv)
+    specular_base = mat_specular * light_specular * specular_intensity.unsqueeze(1) # (N, 3)
+    print(f"基础光照计算耗时: {time.time() - calc_start_time:.4f} 秒")
 
-    # --- 可视化 (可选) ---
-    try:
-        import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
+    # --- 5. 计算衰减和阴影因子 ---
+    print("应用衰减和阴影遮罩...")
+    apply_start_time = time.time()
+    # 计算衰减因子
+    if attenuation_constant > 0:
+        attenuation = attenuation_constant / distance_sq # (N, 1)
+    else:
+        attenuation = torch.ones_like(distance_sq) # 禁用衰减
 
-        print("正在准备可视化...")
-        points_np = mock_positions.cpu().numpy()
-        colors_np = final_point_colors.cpu().numpy()
+    # 从 is_lit_mask 创建阴影因子 (1.0 for lit, 0.0 for shadow)
+    shadow_factors = is_lit_mask.float().unsqueeze(1) # (N, 1)
 
-        fig = plt.figure(figsize=(8, 8))
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(points_np[:, 0], points_np[:, 1], points_np[:, 2], c=colors_np, marker='.', s=5)
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.set_zlabel("Z")
-        ax.set_title("Phong Shaded Points (from SH + Lighting)")
-        ax.set_facecolor('black')
-        # 设置一个大致的范围，基于模拟数据
-        lim = 1.5
-        ax.set_xlim([-lim, lim])
-        ax.set_ylim([-lim, lim])
-        ax.set_zlim([-lim, lim])
-        plt.show()
-    except ImportError:
-        print("Matplotlib 未安装，跳过可视化。")
-    except Exception as e:
-        print(f"可视化时出错: {e}")
+    # --- 6. 应用衰减和阴影因子 ---
+    diffuse_term = diffuse_base * attenuation * shadow_factors # (N, 3)
+    specular_term = specular_base * attenuation * shadow_factors # (N, 3)
 
+    # --- 7. 合并所有光照分量 ---
+    colors_final_gpu = ambient_term + diffuse_term + specular_term # (N, 3)
+
+    # --- 8. 将颜色限制在[0,1]范围内 ---
+    colors_final_gpu = torch.clamp(colors_final_gpu, 0.0, 1.0)
+    print(f"应用衰减和阴影耗时: {time.time() - apply_start_time:.4f} 秒")
+
+    overall_end_time = time.time()
+    print(f"总计算耗时 (不含最终数据传输): {overall_end_time - overall_start_time:.4f} 秒")
+
+    # --- 返回结果 ---
+    if return_cpu:
+        if device != torch.device('cpu'):
+            print("将结果传输回 CPU...")
+            final_colors_cpu = colors_final_gpu.cpu().numpy()
+            print("完成。")
+            return final_colors_cpu
+        else:
+            print("计算在 CPU 上完成，返回 NumPy 数组。")
+            return colors_final_gpu.numpy() # 如果在 CPU 计算，直接转 NumPy
+    else:
+        print("完成。结果保留在计算设备上。")
+        return colors_final_gpu # 返回 GPU/CPU Tensor
