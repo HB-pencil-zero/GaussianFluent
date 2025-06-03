@@ -104,6 +104,7 @@ def get_camera_view(
     delta_a=0,
     delta_e=0,
     delta_r=0,
+    scales = 1 ,
 ):
     """Load one of the default cameras for the scene."""
     cam_path = os.path.join(model_path, "cameras.json")
@@ -165,10 +166,11 @@ def get_camera_view(
         R = C2W[:3, :3].transpose()
         T = C2W[:3, 3]
 
+
         width = raw_camera["width"]
         height = raw_camera["height"]
-        fovx = focal2fov(raw_camera["fx"], width)
-        fovy = focal2fov(raw_camera["fy"], height)
+        fovx = focal2fov(scales * raw_camera["fx"], width)
+        fovy = focal2fov(scales * raw_camera["fy"], height)
 
         return GSCamera(
             colmap_id=0,

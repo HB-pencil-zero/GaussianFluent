@@ -6,33 +6,26 @@
     "rotation_axis": [
         0
     ],
-    "substep_dt": 1e-4,
-    "frame_dt": 3e-2,
-    "frame_num": 300,
-    "E": 2e3,
-    "nu": 0.38,
-    "friction_angle": 45.0,
-    "beta": 1.0,
-    "xi": 3.0,
-    "n_grid": 300,
-    "hardening": 1.0,
-    "material": "watermelon",
-    "flip_pic_ratio" : 0.7,
-    "density": 1,
+    "grid_lim" : 4,
+    "substep_dt": 2e-5,
+    "frame_dt": 4e-2,
+    "frame_num": 24,
+    "E": 5e7,
+    "nu": 0.3,
+    "material": "jelly",
+    "density": 2000,
     "g": [
         0.0,
         0,
-        -15
+        -0.0
     ],
-
-    
     "sim_area": [
-        -2,
-        2,
-        -2,
-        2,
-        -1.5,
-        2
+        -10,
+        10,
+        -10,
+        10,
+        -10,
+        10
     ],
 
     
@@ -56,6 +49,26 @@
             "friction": 0.0,
             "start_time": 0,
             "end_time": 1e3
+        },
+        {
+            "type": "enforce_particle_translation",
+            "point": [
+                1,
+                1,
+                1
+            ],
+            "size": [
+                1,
+                1,
+                0.4
+            ],
+            "velocity": [
+                0,
+                -3,
+                0
+            ],
+            "start_time": 0,
+            "end_time": 1e3
         }
     ],
     "mpm_space_vertical_upward_axis": [
@@ -71,10 +84,10 @@
     "default_camera_index": -1,
     "show_hint": false,
     "init_azimuthm": 60,
-    "init_elevation": 30.0,
-    "init_radius": 7.5,
+    "init_elevation": 0.0,
+    "init_radius": 8.5,
     "move_camera": true,
-    "delta_a": 2.5,
+    "delta_a": 0.0,
     "delta_e": 0,
     "delta_r": 0.0
 }

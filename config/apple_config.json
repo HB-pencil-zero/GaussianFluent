@@ -6,25 +6,38 @@
     "rotation_axis": [
         0
     ],
-    "substep_dt": 1e-4,
-    "frame_dt": 3e-2,
-    "frame_num": 300,
-    "E": 2e3,
-    "nu": 0.38,
-    "friction_angle": 45.0,
-    "beta": 1.0,
-    "xi": 3.0,
-    "n_grid": 300,
-    "hardening": 1.0,
-    "material": "watermelon",
-    "flip_pic_ratio" : 0.7,
-    "density": 1,
+    "substep_dt": 2e-5,
+    "frame_dt": 4e-2,
+    "frame_num": 24,
+    "E": 5e7,
+    "nu": 0.3,
+    "material": "jelly",
+    "density": 2000,
     "g": [
         0.0,
         0,
-        -15
+        -0.0
     ],
-
+    "particle_filling": {
+        "n_grid": 100,
+        "density_threshold": 1000 ,
+        "search_threshold": 0.1,
+        "search_exclude_direction": 7,
+        "ray_cast_direction": 4,
+        "max_particles_num": 5000000,
+        "max_partciels_per_cell": 30,
+        "boundary": [
+        0.4,
+        1.6,
+        0.4,
+        1.6,
+        0.4,
+        1.6
+        ],
+        "smooth": true,
+        "visualize": true
+    },
+        
     
     "sim_area": [
         -2,
@@ -70,11 +83,11 @@
     ],
     "default_camera_index": -1,
     "show_hint": false,
-    "init_azimuthm": 60,
-    "init_elevation": 30.0,
-    "init_radius": 7.5,
+    "init_azimuthm": 90,
+    "init_elevation": 0.0,
+    "init_radius": 6.5,
     "move_camera": true,
-    "delta_a": 2.5,
+    "delta_a": 6.0,
     "delta_e": 0,
     "delta_r": 0.0
 }

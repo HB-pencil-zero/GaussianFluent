@@ -91,8 +91,9 @@ def apply_phong_lighting_to_gaussians_with_mask(
         'specular_color': [0.8, 0.8, 0.8], # 镜面反射颜色/系数 (白色高光)
         'shininess': 32.0             # 高光指数
     },
-    attenuation_constant: float = 10.0, # 光强衰减公式中的常数 (参考代码默认5.0)
+    attenuation_constant: float = 20.0, # 光强衰减公式中的常数 (参考代码默认5.0)
     rotation: torch.Tensor = None,     # 可选的旋转
+    mask = None,
     return_cpu: bool = False           # 是否将最终结果返回到CPU (默认不返回)
 ):
     """
@@ -123,8 +124,10 @@ def apply_phong_lighting_to_gaussians_with_mask(
 
     # --- 从 gaussian_model 获取数据 ---
     try:
-        features_dc_input = gaussian_model._features_dc
-        position = gaussian_model.get_xyz
+        if mask is None :
+            mask = torch.arange(start=0, end=gaussian_model._xyz.shape[0]).cuda()
+        features_dc_input = gaussian_model._features_dc[mask]
+        position = gaussian_model.get_xyz[mask]
         # 获取法线 - 优先使用 override，否则从模型获取
         if normals_override is not None:
             normals = normals_override

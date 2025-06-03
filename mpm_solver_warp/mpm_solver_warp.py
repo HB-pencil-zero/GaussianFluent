@@ -425,7 +425,7 @@ class MPM_Simulator_WARP:
             device=device,
         )
 
-    def p2g2p(self, step, dt, device="cuda:0" , flip_pic_ratio: float = 0.80):
+    def p2g2p(self, step, dt, device="cuda:0" , flip_pic_ratio: float = 0.80, flip_pic: bool =True):
         grid_size = (
             self.mpm_model.grid_dim_x,
             self.mpm_model.grid_dim_y,
@@ -480,13 +480,23 @@ class MPM_Simulator_WARP:
             print=False,
             dict=self.time_profile,
         ):
-            wp.launch(
-                # kernel=p2g_apic_with_stress,
-                kernel=p2g_flip_pic_with_stress,
-                dim=self.n_particles,
-                inputs=[self.mpm_state, self.mpm_model, dt],
-                device=device,
-            )  # apply p2g'
+            if flip_pic:
+                wp.launch(
+                    # kernel=p2g_apic_with_stress,
+                    kernel=p2g_flip_pic_with_stress,
+                    dim=self.n_particles,
+                    inputs=[self.mpm_state, self.mpm_model, dt],
+                    device=device,
+                )  # apply p2g'
+            else :
+                wp.launch(
+                    kernel=p2g_apic_with_stress,
+                    # kernel=p2g_flip_pic_with_stress,
+                    dim=self.n_particles,
+                    inputs=[self.mpm_state, self.mpm_model, dt],
+                    device=device,
+                )  # apply p2g'
+
 
         # grid update
         with wp.ScopedTimer(
@@ -531,13 +541,21 @@ class MPM_Simulator_WARP:
         with wp.ScopedTimer(
             "g2p", synchronize=True, print=False, dict=self.time_profile
         ):
-            wp.launch(
-                # kernel=g2p,
-                kernel=g2p_flip,
-                dim=self.n_particles,
-                inputs=[self.mpm_state, self.mpm_model, dt, flip_pic_ratio],
-                device=device,
-            )  # x, v, C, F_trial are updated
+            if flip_pic:
+                wp.launch(
+                    # kernel=g2p,
+                    kernel=g2p_flip,
+                    dim=self.n_particles,
+                    inputs=[self.mpm_state, self.mpm_model, dt, flip_pic_ratio],
+                    device=device,
+                )  # x, v, C, F_trial are updated
+            else:  
+                wp.launch(
+                    kernel=g2p,
+                    dim=self.n_particles,
+                    inputs=[self.mpm_state, self.mpm_model, dt],
+                    device=device,
+                )  # x, v, C, F_trial are updated
 
         #### CFL check ####
         # particle_v = self.mpm_state.particle_v.numpy()

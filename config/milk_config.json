@@ -1,5 +1,5 @@
 {
-    "opacity_threshold": 0.000000,
+    "opacity_threshold": 0.01,
     "rotation_degree": [
         0.0
     ],
@@ -8,21 +8,21 @@
     ],
     "substep_dt": 1e-4,
     "frame_dt": 3e-2,
-    "frame_num": 300,
-    "E": 2e3,
-    "nu": 0.38,
-    "friction_angle": 45.0,
-    "beta": 1.0,
-    "xi": 3.0,
-    "n_grid": 300,
+    "frame_num": 50,
+    "E": 1e3,
+    "nu": 0.49,
+    "friction_angle": 0.0,
+    "beta": 0,
+    "xi": 0.1,
+    "n_grid": 100,
     "hardening": 1.0,
     "material": "watermelon",
-    "flip_pic_ratio" : 0.7,
+    "flip_pic_ratio" : 0.99,
     "density": 1,
     "g": [
         0.0,
         0,
-        -15
+        -10
     ],
 
     

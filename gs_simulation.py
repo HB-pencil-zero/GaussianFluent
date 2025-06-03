@@ -39,11 +39,12 @@ from utils.transformation_utils import *
 from utils.camera_view_utils import *
 from utils.render_utils import *
 from utils.lighting_utils import *
+from utils.normal_utils import *
 
 wp.init()
 wp.config.verify_cuda = True
 
-ti.init(arch=ti.cuda, device_memory_GB=4.0, random_seed=42)
+ti.init(arch=ti.cuda, device_memory_GB=2.0, random_seed=42)
 
 import sys # 导入 sys 模块以使用 sys.stdout.flush()
 
@@ -135,6 +136,7 @@ if __name__ == "__main__":
     parser.add_argument("--compile_video", action="store_true")
     parser.add_argument("--white_bg", action="store_true")
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--load_from_saved", action="store_true", help="Load simulation data from saved .pt files instead of running the simulation.")
     args = parser.parse_args()
 
     if not os.path.exists(args.model_path):
@@ -143,6 +145,10 @@ if __name__ == "__main__":
         AssertionError("Scene config does not exist!")
     if args.output_path is not None and not os.path.exists(args.output_path):
         os.makedirs(args.output_path)
+        # 复制config文件到输出目录
+        import shutil
+        config_name = os.path.basename(args.config)
+        shutil.copy2(args.config, os.path.join(args.output_path, config_name))
 
     # load scene config
     print("Loading scene config...")
@@ -165,7 +171,7 @@ if __name__ == "__main__":
         if args.white_bg
         else torch.tensor([0, 0, 0], dtype=torch.float32, device="cuda")
     )
-
+    # background = torch.tensor([0, 0, 0], dtype=torch.float32, device="cuda")
     # init the scene
     print("Initializing scene and pre-processing...")
     params = load_params_from_gs(gaussians, pipeline)
@@ -183,7 +189,16 @@ if __name__ == "__main__":
     init_opacity = init_opacity[mask, :]
     init_screen_points = init_screen_points[mask, :]
     init_shs = init_shs[mask, :]
+    
+    gaussians._xyz = gaussians._xyz[mask, :]
+    gaussians._features_dc = gaussians._features_dc[mask, :]
+    gaussians._features_rest = gaussians._features_rest[mask, :]
+    gaussians._opacity = gaussians._opacity[mask, :]
+    gaussians._scaling = gaussians._scaling[mask, :]
+    gaussians._rotation = gaussians._rotation[mask, :]
 
+    mask_opa = mask
+    
     # rorate and translate object
     if args.debug:
         if not os.path.exists("./log"):
@@ -297,7 +312,12 @@ if __name__ == "__main__":
 
     # set up the mpm solver
     mpm_solver = MPM_Simulator_WARP(10)
+    
     # mpm_init_pos[:, 2] = mpm_init_pos[:, 2] - 0.5
+    # scale_factor =  1 / 3 
+    # mpm_init_cov *= scale_factor**2
+    # mpm_init_pos =  mpm_init_pos.mean(dim = 0) + scale_factor *(mpm_init_pos -  mpm_init_pos.mean(dim = 0))
+    # mpm_init_pos[:, 1] += 1
     mpm_solver.load_initial_data_from_torch(
         mpm_init_pos,
         mpm_init_vol,
@@ -310,12 +330,11 @@ if __name__ == "__main__":
     beta = mpm_solver.mpm_model.beta.numpy()
     mask1 = (gaussians._features_dc < -0.5).all(axis=2).cpu().numpy().squeeze()
     mask2 = (gaussians._features_dc > -2.5).all(axis=2).cpu().numpy().squeeze()
-    mask = mask1 & mask2
-    selected_xyz = gaussians._xyz[mask]
+    mask_ = mask1 & mask2
+    selected_xyz = gaussians._xyz[mask_]
     mask1 = (gaussians._features_dc > 1.0).all(axis=2).cpu().numpy().squeeze()
     mask2 = (gaussians._features_dc < 4).all(axis=2).cpu().numpy().squeeze()
     mask__ = mask1 & mask2
-    selected_xyz2 = gaussians._xyz[mask]
     
     
 
@@ -336,8 +355,8 @@ if __name__ == "__main__":
     new_mask[all_neighbors] = True
     
     
-    beta[new_mask.cpu().numpy()] = 3000
-    beta[mask__] = 2
+    beta[new_mask.cpu().numpy()] = 3000000000
+    # beta[mask__] = 2
     
     mpm_solver.mpm_model.beta.assign(beta)
     
@@ -348,7 +367,7 @@ if __name__ == "__main__":
 
     mpm_solver.finalize_mu_lam()
 
-    mpm_solver.import_particle_v_from_torch(torch.zeros(mpm_init_pos.shape[0], 3, device='cuda').add_(torch.tensor([0.0, 0.0, 0.0], device='cuda')))
+    mpm_solver.import_particle_v_from_torch(torch.zeros(mpm_init_pos.shape[0], 3, device='cuda').add_(torch.tensor([0.0, 0.0, -6.0], device='cuda')))
     # camera setting
     mpm_space_viewpoint_center = (
         torch.tensor(camera_params["mpm_space_viewpoint_center"]).reshape((1, 3)).cuda()
@@ -403,9 +422,12 @@ if __name__ == "__main__":
     # torch.cuda.empty_cache()
     color_flag = False
     # color_flag = True
+    
+    # load_color = True
     light_flag = True
-    end_frame = 22
+    end_frame = 100
     for frame in tqdm(range(frame_num)):
+        # frame = 16 + frame
         current_camera = get_camera_view(
             model_path,
             default_camera_index=camera_params["default_camera_index"],
@@ -434,19 +456,21 @@ if __name__ == "__main__":
             show_hint=camera_params["show_hint"],
             init_azimuthm=camera_params["init_azimuthm"],
             init_elevation=90,
-            init_radius=3,
+            init_radius=5,
             move_camera=camera_params["move_camera"],
             current_frame=frame,
             delta_a=camera_params["delta_a"],
             delta_e=camera_params["delta_e"],
             delta_r=camera_params["delta_r"],
+            scales=1
         )
         rasterize2 = initialize_resterize(
             current_camera2, gaussians, pipeline, background
         )
-
-        for step in range(step_per_frame):
-            mpm_solver.p2g2p(step, substep_dt, device=device, flip_pic_ratio=material_params['flip_pic_ratio'])
+        if not args.load_from_saved :
+            # pass
+            for step in range(step_per_frame):
+                mpm_solver.p2g2p(step, substep_dt, device=device, flip_pic_ratio=material_params['flip_pic_ratio'])
 
         if args.output_ply or args.output_h5:
             save_data_at_frame(
@@ -456,103 +480,196 @@ if __name__ == "__main__":
                 save_to_ply=args.output_ply,
                 save_to_h5=args.output_h5,
             )
-
+            
+        gaussians2 = load_checkpoint("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden")
+        pos2 =  gaussians2._xyz.detach() 
+        pos2[:, 2] -= 2.2
+        cov3D2 = gaussians2.get_covariance() 
+        rot2 = torch.eye(3, device="cuda").expand(gaussians2._xyz.shape[0], 3, 3)
+        opacity_render2 = gaussians2.get_opacity
+        shs_render2 = 0.8 * gaussians2.get_features
         if args.render_img:
-            pos = mpm_solver.export_particle_x_to_torch()[:gs_num].to(device)
-            cov3D = mpm_solver.export_particle_cov_to_torch()
-            rot = mpm_solver.export_particle_R_to_torch()
-            cov3D = cov3D.view(-1, 6)[:gs_num].to(device)
-            rot = rot.view(-1, 3, 3)[:gs_num].to(device)
+            # Define a new base directory within args.output_path for detailed tensor data
+            per_frame_tensor_output_base_dir = os.path.join(args.output_path, "gaussian_frame_data")
+            os.makedirs(per_frame_tensor_output_base_dir, exist_ok=True)
 
-            pos = apply_inverse_rotations(
-                undotransform2origin(
-                    undoshift2center111(pos), scale_origin, original_mean_pos
-                ),
-                rotation_matrices,
-            )
-            cov3D = cov3D / (scale_origin * scale_origin)
-            cov3D = apply_inverse_cov_rotations(cov3D, rotation_matrices)
-            opacity = opacity_render
-            shs = shs_render
-            if preprocessing_params["sim_area"] is not None:
-                pos = torch.cat([pos, unselected_pos], dim=0)
-                cov3D = torch.cat([cov3D, unselected_cov], dim=0)
-                opacity = torch.cat([opacity_render, unselected_opacity], dim=0)
-                shs = torch.cat([shs_render, unselected_shs], dim=0)
+            # Create a subdirectory for the current frame's tensors
+            current_frame_tensor_dir = os.path.join(per_frame_tensor_output_base_dir, f"frame_{frame:05d}") # e.g., frame_00000, frame_00001
+            os.makedirs(current_frame_tensor_dir, exist_ok=True)
+            # 获取初始数据
+            if not args.load_from_saved :
+                pos = mpm_solver.export_particle_x_to_torch()[:gs_num].to(device)
+                cov3D = mpm_solver.export_particle_cov_to_torch()
+                rot = mpm_solver.export_particle_R_to_torch()
+                cov3D = cov3D.view(-1, 6)[:gs_num].to(device)
+                rot = rot.view(-1, 3, 3)[:gs_num].to(device)
 
-            colors_precomp = convert_SH(shs, current_camera, gaussians, pos, rot)
+                # 应用变换
+                pos = apply_inverse_rotations(
+                    undotransform2origin(
+                        undoshift2center111(pos), scale_origin, original_mean_pos
+                    ),
+                    rotation_matrices,
+                )
+                cov3D = cov3D / (scale_origin * scale_origin)
+                cov3D = apply_inverse_cov_rotations(cov3D, rotation_matrices)
+                opacity = opacity_render
+                shs = shs_render
+
+
+
+                # 如果有sim_area,添加未选择的点
+                if preprocessing_params["sim_area"] is not None:
+                    pos = torch.cat([pos, unselected_pos], dim=0)
+                    cov3D = torch.cat([cov3D, unselected_cov], dim=0)
+                    opacity = torch.cat([opacity_render, unselected_opacity], dim=0)
+                    shs = torch.cat([shs_render, unselected_shs], dim=0)
+
+                alpha = mpm_solver.mpm_state.particle_Jp.numpy()
+                mask = alpha > 0.4
+                opacity[mask] = 0
+                
+                # 检测并移除含有nan的点
+                # valid_mask = ~torch.isnan(pos).any(dim=1)
+                # pos = pos[valid_mask]
+                # cov3D = cov3D[valid_mask]
+                # rot = rot[valid_mask]
+                # opacity = opacity[valid_mask]
+                # shs = shs[valid_mask]
+                
+            else:
+                # 从当前帧的目录加载保存的张量数据
+                tensors_to_load = {
+                    "pos.pt": None,
+                    "rot.pt": None,
+                    "cov3D.pt": None, 
+                    "shs.pt": None,
+                    "opacity.pt": None
+                }
+
+                # 加载每个张量
+                for filename, _ in tensors_to_load.items():
+                    load_path = os.path.join(current_frame_tensor_dir, filename)
+                    if os.path.exists(load_path):
+                        tensors_to_load[filename] = torch.load(load_path, weights_only=True).to(device)
+                    else:
+                        print(f"警告: 找不到文件 {filename} ,帧 {frame}")
+
+                # 将加载的张量赋值给对应变量
+                pos = tensors_to_load["pos.pt"]
+                rot = tensors_to_load["rot.pt"]
+                cov3D = tensors_to_load["cov3D.pt"]
+                shs = tensors_to_load["shs.pt"]
+                opacity = tensors_to_load["opacity.pt"]
+                
+            light_output_base_dir = os.path.join(args.output_path, "normal_and_light")
+            os.makedirs(light_output_base_dir, exist_ok=True)
+            
+            current_frame_light_dir = os.path.join(light_output_base_dir, f"frame_{frame:05d}") # e.g., frame_00000, frame_00001
+            os.makedirs(current_frame_light_dir, exist_ok=True)
+            
             if color_flag:
                 if  light_flag : 
-                    np.save("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos.npy", pos.detach().cpu().numpy())
-                    command = 'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python normal_vector_proc_nan.py'
-                    # run_command_realtime(command)
-                    # process = subprocess.Popen(
-                    #     ["bash", "-c", command],
-                    #     stdout=subprocess.PIPE,
-                    #     stderr=subprocess.PIPE,
-                    #     text=True
+                    npy_path = os.path.join(current_frame_tensor_dir, 'pos.pt')
+                    opacity_path = os.path.join(current_frame_tensor_dir, 'opacity.pt')
+                    output_folder = current_frame_light_dir
+                    # np.save("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos.npy", pos.detach().cpu().numpy())
+                    command = f'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python normal_vector_proc_nan.py --npy_path {npy_path} --output_folder {output_folder}'
+                    run_command_realtime(command)
+
+                    normal_path = os.path.join(output_folder, 'pos_valid_with_normals.ply')
+                    valid_indice_path = os.path.join(output_folder, "pos_valid_indice.npy")
+                    command = f'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python phong_model_wm_shs_15.py \
+                                --npy_path {normal_path} --output_folder {output_folder}  --opacity_path {opacity_path} --valid_indice_path {valid_indice_path}'
+                    run_command_realtime(command)
+
+
+                    # _, _, point_xy2 = rasterize2(
+                    #     means3D=pos,
+                    #     means2D=init_screen_points,
+                    #     shs=None,
+                    #     colors_precomp=colors_precomp,
+                    #     opacities=opacity,
+                    #     scales=None,
+                    #     rotations=None,
+                    #     cov3D_precomp=cov3D,
                     # )
-                    # # 获取输出
-                    # stdout, stderr = process.communicate()
-
-                    command = 'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python phong_model_wm_shs_15.py'
-                    # run_command_realtime(command)
-                    # process = subprocess.Popen(
-                    #     ["bash", "-c", command],
-                    #     stdout=subprocess.PIPE,
-                    #     stderr=subprocess.PIPE,
-                    #     text=True
+                    
+                    # # normal = compute_normals_pure_torch(pos)
+                    # normal  = np.load("valid_normals.npy")
+                    # normal = optimize_normals_consistency(pos.detach().cpu().numpy(), normal, k=30)
+                    # normal = torch.from_numpy(normal).cuda()
+                    # # normal = optimize_normals_consistency_pt_cuda_tensor_input(pos, normal , k=30)
+                    # light_bool_mask = calculate_occlusion_map_light_dist_angle_cuda(
+                    #     pos,
+                    #     point_xy2,
+                    #     current_camera2.camera_center
                     # )
-                    # # 获取输出
-                    # stdout, stderr = process.communicate()
-
-
-                # pos = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos.npy")).to("cuda")
-                valid_indice = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos_valid_indice.npy")).to("cuda")
-                colors = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/phong_colors.npy")).to("cuda").reshape(-1 , 3).float()
-                # colors_precomp[valid_indice] = colors
-                # pos[valid_indice] = pos_tmp
+                    
+                    # colors_precomp = apply_phong_lighting_to_gaussians_with_mask(
+                    #     gaussian_model = gaussians,
+                    #     viewpoint_camera = current_camera2,
+                    #     is_lit_mask = light_bool_mask,
+                    #     normals_override = normal ,
+                    #     mask=valid_mask
+                    # )
+                valid_indice = torch.from_numpy(np.load(os.path.join(output_folder, "pos_valid_indice.npy"))).to("cuda")
+                colors = torch.from_numpy(np.load(os.path.join(output_folder, "phong_colors.npy"))).to("cuda").reshape(-1 , 3).float()
 
             
-            rendering2, raddi2, point_xy2 = rasterize2(
-                means3D=pos,
-                means2D=init_screen_points,
-                shs=None,
-                colors_precomp=colors_precomp,
-                opacities=opacity,
-                scales=None,
-                rotations=None,
-                cov3D_precomp=cov3D,
-            )
+            # pos_ = pos
+            # cov3D_ = cov3D
+            # rot_ = rot
+            # opacity_ =  opacity_render
+            # shs_ = shs_render
             
-            # shadow = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/shadow_factors_shdw1_bs100_eps0p001_align0p999_ign1.npy")).squeeze().bool()
-            normal = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/N_norm_corrected_shdw1_bs100_eps0p001_align0p999_ign1.npy"))
-            light_bool_mask = calculate_occlusion_map_light_dist_angle_cuda(
-                pos,
-                point_xy2,
-                current_camera2.camera_center
-            )
             
-            colors_precomp = apply_phong_lighting_to_gaussians_with_mask(
-                gaussian_model = gaussians,
-                viewpoint_camera = current_camera2,
-                is_lit_mask = light_bool_mask,
-                normals_override = normal 
-            )
+            
+            pos_ = torch.concat([pos, pos2],dim =0 )
+            cov3D_ = torch.concat([cov3D, cov3D2],dim =0 )
+            rot_ = torch.concat([rot, rot2],dim =0 )
+            opacity_ = torch.concat([opacity , opacity_render2],dim =0 )
+            shs_ = torch.concat([shs, shs_render2],dim =0 )
+            
+            
+            colors_precomp = convert_SH(shs_, current_camera, gaussians, pos_, rot_)
+            if color_flag:
+                colors_precomp[ valid_indice ]  = colors.clone()
+
+
+        
             
             
             rendering, raddi, point_xy = rasterize(
-                means3D=pos,
+                means3D=pos_,
                 means2D=init_screen_points,
                 shs=None,
-                colors_precomp=colors_precomp,
-                opacities=opacity,
+                colors_precomp=colors_precomp.float(),
+                opacities=opacity_, 
                 scales=None,
                 rotations=None,
-                cov3D_precomp=cov3D,
+                cov3D_precomp=cov3D_,
             )
             
-            
+
+
+            # Tensors to save for the current frame.
+            # Ensure these variables hold the correct data for the *current frame* at this point.
+            tensors_to_save = {
+                "pos.pt": pos,
+                "rot.pt": rot,  # This should be the rotation data (e.g., from gaussians.get_rotation() or the 'rot' used in convert_SH)
+                "cov3D.pt": cov3D, # This should be the covariance data (e.g., from gaussians.get_covariance() or the 'cov3D' used in rasterize)
+                "shs.pt": shs,  # This should be the SH coefficients (e.g., from gaussians.get_features() or the 'shs' used in convert_SH)
+                "opacity.pt": opacity # This should be the opacity data (e.g., from gaussians.get_opacity() or the 'opacity' used in rasterize)
+            }
+
+            # for filename, tensor_data in tensors_to_save.items():
+            #     if tensor_data is not None:
+            #         save_path = os.path.join(current_frame_tensor_dir, filename)
+            #         # Detach from computation graph and move to CPU before saving (good practice)
+            #         torch.save(tensor_data.detach().cpu(), save_path)
+            #     else:
+            #         print(f"Warning: Tensor for {filename} in frame {frame} is None. Skipping save.")    
             cv2_img = rendering.permute(1, 2, 0).detach().cpu().numpy()
             cv2_img = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
             if height is None or width is None:
@@ -566,7 +683,7 @@ if __name__ == "__main__":
             if frame > end_frame:
                 light_flag = False
     if args.render_img and args.compile_video:
-        fps = int(1.0 / time_params["frame_dt"])
+        fps = int(1.0 / time_params["frame_dt"] / 1.4) 
         os.system(
             f"ffmpeg -framerate {fps} -i {args.output_path}/%04d.png -c:v libx264 -s {width}x{height} -y -pix_fmt yuv420p {args.output_path}/output.mp4"
         )

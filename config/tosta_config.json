@@ -8,7 +8,7 @@
     ],
     "substep_dt": 1e-4,
     "frame_dt": 3e-2,
-    "frame_num": 300,
+    "frame_num": 150,
     "E": 2e3,
     "nu": 0.38,
     "friction_angle": 45.0,
@@ -66,15 +66,15 @@
     "mpm_space_viewpoint_center": [
         1,
         1,
-        1
+        0.5
     ],
     "default_camera_index": -1,
     "show_hint": false,
-    "init_azimuthm": 60,
+    "init_azimuthm": 150,
     "init_elevation": 30.0,
-    "init_radius": 7.5,
+    "init_radius": 6,
     "move_camera": true,
-    "delta_a": 2.5,
+    "delta_a": 3,
     "delta_e": 0,
     "delta_r": 0.0
 }

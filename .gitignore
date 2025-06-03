@@ -7,3 +7,10 @@ output
 *.jpg
 model
 log
+video/
+watermelon_frame/
+*.npy
+normal_vector_example.py
+phong_model_wm_shs.py
+phong_shadow.py
+shutil_proc.py

@@ -701,7 +701,7 @@ def g2p(state: MPMStateStruct, model: MPMModelStruct, dt: float):
             update_cov(state, p, new_F, dt)
 
 
-# 动量还是速度得再看下
+
 @wp.kernel
 def g2p_flip(state: MPMStateStruct, model: MPMModelStruct, dt: float , flip_pic_ratio: float): 
     p = wp.tid()

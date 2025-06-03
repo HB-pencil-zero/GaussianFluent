@@ -14,15 +14,15 @@
     "friction_angle": 45.0,
     "beta": 1.0,
     "xi": 3.0,
-    "n_grid": 300,
+    "n_grid": 100,
     "hardening": 1.0,
-    "material": "watermelon",
-    "flip_pic_ratio" : 0.7,
+    "material": "jelly",
+    "flip_pic_ratio" : 1.0,
     "density": 1,
     "g": [
         0.0,
         0,
-        -15
+        -10
     ],
 
     
