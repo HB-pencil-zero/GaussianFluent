@@ -66,15 +66,15 @@
     "mpm_space_viewpoint_center": [
         1,
         1,
-        1
+        0.5
     ],
     "default_camera_index": -1,
     "show_hint": false,
-    "init_azimuthm": 60,
+    "init_azimuthm": 265,
     "init_elevation": 30.0,
     "init_radius": 7.5,
     "move_camera": true,
-    "delta_a": 2.5,
+    "delta_a": 0,
     "delta_e": 0,
     "delta_r": 0.0
 }

@@ -167,8 +167,8 @@ def get_camera_view(
         T = C2W[:3, 3]
 
 
-        width = raw_camera["width"]
-        height = raw_camera["height"]
+        width = int(raw_camera["width"] * scales)
+        height = int(raw_camera["height"] * scales)
         fovx = focal2fov(scales * raw_camera["fx"], width)
         fovy = focal2fov(scales * raw_camera["fy"], height)
 
@@ -183,3 +183,86 @@ def get_camera_view(
             image_name="fake",
             uid=0,
         )
+
+
+
+def reconstruct_cov_from_flat(uncertainty_flat):
+    """
+    将 (n, 6) 的扁平化协方差表示转换回 (n, 3, 3) 的完整协方差矩阵。
+    uncertainty_flat 的元素对应: [c00, c01, c02, c11, c12, c22]
+    """
+    n = uncertainty_flat.shape[0]
+    # 确保在与 uncertainty_flat 相同的设备和数据类型上创建
+    cov_matrices = torch.zeros((n, 3, 3), dtype=uncertainty_flat.dtype, device=uncertainty_flat.device)
+
+    cov_matrices[:, 0, 0] = uncertainty_flat[:, 0]
+    cov_matrices[:, 0, 1] = uncertainty_flat[:, 1]
+    cov_matrices[:, 1, 0] = uncertainty_flat[:, 1] # 对称性
+    cov_matrices[:, 0, 2] = uncertainty_flat[:, 2]
+    cov_matrices[:, 2, 0] = uncertainty_flat[:, 2] # 对称性
+    cov_matrices[:, 1, 1] = uncertainty_flat[:, 3]
+    cov_matrices[:, 1, 2] = uncertainty_flat[:, 4]
+    cov_matrices[:, 2, 1] = uncertainty_flat[:, 4] # 对称性
+    cov_matrices[:, 2, 2] = uncertainty_flat[:, 5]
+    return cov_matrices
+
+def flatten_cov_to_flat(cov_matrices):
+    """
+    将 (n, 3, 3) 的完整协方差矩阵转换回 (n, 6) 的扁平化表示。
+    输出的扁平化表示对应: [c00, c01, c02, c11, c12, c22]
+    """
+    n = cov_matrices.shape[0]
+    # 确保在与 cov_matrices 相同的设备和数据类型上创建
+    uncertainty_flat = torch.zeros((n, 6), dtype=cov_matrices.dtype, device=cov_matrices.device)
+
+    uncertainty_flat[:, 0] = cov_matrices[:, 0, 0]
+    uncertainty_flat[:, 1] = cov_matrices[:, 0, 1]
+    uncertainty_flat[:, 2] = cov_matrices[:, 0, 2]
+    uncertainty_flat[:, 3] = cov_matrices[:, 1, 1]
+    uncertainty_flat[:, 4] = cov_matrices[:, 1, 2]
+    uncertainty_flat[:, 5] = cov_matrices[:, 2, 2]
+    return uncertainty_flat
+
+def rotate_flat_covariance(uncertainty_flat, R_batch):
+    """
+    对以 (n, 6) 格式表示的一批协方差施加旋转。
+
+    参数:
+        uncertainty_flat (torch.Tensor): 形状为 (n, 6) 的张量，表示 n 个协方差矩阵的
+                                         上三角元素 [c00, c01, c02, c11, c12, c22]。
+        R_batch (torch.Tensor): 旋转矩阵。可以是：
+                                - (3, 3): 应用于所有协方差的单个旋转矩阵。
+                                - (n, 3, 3): 一批旋转矩阵，每个协方差对应一个。
+
+    返回:
+        torch.Tensor: 形状为 (n, 6) 的张量，表示旋转后的协方差，格式与输入相同。
+    """
+    n = uncertainty_flat.shape[0]
+
+    # 1. 从 (n, 6) 重构为 (n, 3, 3)
+    cov_matrices = reconstruct_cov_from_flat(uncertainty_flat) # Shape: (n, 3, 3)
+
+    # 2. 应用旋转: Cov_rot = R @ Cov @ R.T
+    if R_batch.ndim == 2: # 单个 (3,3) 旋转矩阵
+        if R_batch.shape != (3, 3):
+            raise ValueError(f"单个旋转矩阵 R_batch 必须是 (3,3)，得到 {R_batch.shape}")
+        # R_batch (3,3), cov_matrices (n,3,3)
+        # R_batch @ cov_matrices -> (n,3,3) (利用matmul的广播规则)
+        # (n,3,3) @ R_batch.T (3,3) -> (n,3,3)
+        R_T_batch = R_batch.T
+        rotated_cov_matrices = R_batch @ cov_matrices @ R_T_batch
+    elif R_batch.ndim == 3: # 一批 (n,3,3) 旋转矩阵
+        if R_batch.shape != (n, 3, 3):
+            raise ValueError(f"批量旋转矩阵 R_batch 必须是 ({n},3,3)，得到 {R_batch.shape}")
+        # R_batch (n,3,3), cov_matrices (n,3,3)
+        # R_batch @ cov_matrices -> (n,3,3) (逐元素批次矩阵乘法)
+        # (n,3,3) @ R_batch.transpose(-2, -1) (n,3,3) -> (n,3,3)
+        R_T_batch = R_batch.transpose(-2, -1) # 转置最后两个维度
+        rotated_cov_matrices = R_batch @ cov_matrices @ R_T_batch
+    else:
+        raise ValueError("R_batch 必须是形状为 (3,3) 或 (n,3,3) 的张量")
+
+    # 3. 将旋转后的 (n, 3, 3) 协方差矩阵转换回 (n, 6) 格式
+    rotated_uncertainty_flat = flatten_cov_to_flat(rotated_cov_matrices)
+
+    return rotated_uncertainty_flat

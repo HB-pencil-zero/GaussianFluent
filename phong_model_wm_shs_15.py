@@ -8,6 +8,8 @@ from plyfile import PlyData, PlyElement
 import time
 import torch
 from tqdm import tqdm
+import torch.nn.functional as F
+from shadow_extension.shadow_extension import calculate_shadows_ignore_first_hits
 
 # 检查CUDA是否可用
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -171,7 +173,7 @@ def calculate_phong_colors_attenuated_shadowed_internal_batch(
         shadow_calc_start_time = time.time()
         # --- 硬编码 ignore_first_n_hits ---
         
-
+        print("calculate 阴影")
         shadow_factors = calculate_shadows_ignore_first_hits(
             points_gpu, L, distance_to_light, opacity ,enable_shadows, shadow_batch_size,
             shadow_epsilon, alignment_threshold, ignore_first_n_hits) # 传递参数
@@ -333,66 +335,7 @@ def calculate_phong_colors_attenuated_shadowed_internal_batch(
 
 
 
-def calculate_shadows_ignore_first_hits_backup(
-    points_gpu: torch.Tensor,
-    L: torch.Tensor,
-    distance_to_light: torch.Tensor,
-    opacity : torch.Tensor,
-    enable_shadows: bool = True,
-    shadow_batch_size: int = 1024,
-    shadow_epsilon: float = 1e-5,
-    alignment_threshold: float = 0.99,
-    num_surface_points: int = 5
-) -> torch.Tensor:
-    N = points_gpu.shape[0]
-    _device = points_gpu.device
-    shadow_factors = torch.ones(N, 1, device=_device, dtype=points_gpu.dtype)
-
-    if not enable_shadows or N <= 1 or num_surface_points < 0:
-        return shadow_factors
-
-    print(f"开始计算阴影 (忽略前 K={num_surface_points} 个点, 批大小 B={shadow_batch_size})...")
-    shadow_calc_start_time = time.time()
-    num_shadow_batches = math.ceil(N / shadow_batch_size)
-    
-    points_expanded_occluder = points_gpu.view(1, N, 3)
-    
-    for i in tqdm(range(num_shadow_batches)):
-        batch_start_idx = i * shadow_batch_size
-        batch_end_idx = min((i + 1) * shadow_batch_size, N)
-        current_batch_indices = torch.arange(batch_start_idx, batch_end_idx, device=_device)
-        current_active_batch_size = len(current_batch_indices)
-        
-        if current_active_batch_size == 0:
-            continue
-
-        batch_points = points_gpu[current_batch_indices]
-        batch_L = L[current_batch_indices]
-        batch_dist_light = distance_to_light[current_batch_indices]
-        batch_dist_light_sq = batch_dist_light.square()
-
-        points_target = batch_points.unsqueeze(1)
-        vec_diff = points_expanded_occluder - points_target  # (B, N, 3)
-        
-        dot_products = torch.einsum('bnd,bd->bn', vec_diff, batch_L)  # (B, N)
-        dist_sq = torch.sum(vec_diff.pow(2), dim=2)  # (B, N)
-
-        # 修正1：添加方向正负号判断
-        valid_dist_mask = (dist_sq > shadow_epsilon**2) & (dist_sq < batch_dist_light_sq)
-        positive_dot_mask = dot_products > 0  # 确保方向一致
-        alignment_mask = (dot_products.pow(2) > (alignment_threshold**2 * dist_sq)) & positive_dot_mask
-        is_occluder = valid_dist_mask & alignment_mask
-
-        occluder_counts = is_occluder.sum(dim=1)
-        shadow_mask = occluder_counts > num_surface_points
-        shadow_indices = current_batch_indices[shadow_mask]
-        if shadow_indices.numel() > 0:
-            shadow_factors[shadow_indices] = 0.0
-
-    print(f"阴影计算耗时: {time.time() - shadow_calc_start_time:.2f}s")
-    return shadow_factors
-
-def calculate_shadows_ignore_first_hits(
+def calculate_shadows_ignore_first_hits__(
     points_gpu: torch.Tensor,
     L: torch.Tensor,
     distance_to_light: torch.Tensor,
@@ -464,6 +407,9 @@ def calculate_shadows_ignore_first_hits(
 
     print(f"阴影计算耗时: {time.time() - shadow_calc_start_time:.2f}s")
     return shadow_factors
+
+
+
 
 def optimize_normals_consistency(points, normals, k=10):
     """使用Open3D优化法向量一致性"""
@@ -547,12 +493,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     output_folder = args.output_folder 
     
-    
+
     # --- 文件路径定义 ---
     # 新的 PLY 文件，包含位置和法向量
     combined_ply_path = args.npy_path 
     # 原始的 PLY 文件，用于读取颜色 (f_dc 特征)
-    original_ply_path = "/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/pumkin/point_cloud/iteration_30000/point_cloud.ply"
+    original_ply_path = "/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/watermelon/point_cloud/iteration_30000/point_cloud.ply"
     valid_indices = np.load(args.valid_indice_path)
     opacity_tensor = torch.load(args.opacity_path, weights_only=True).cuda()[torch.from_numpy(valid_indices)]
 
@@ -690,8 +636,8 @@ if __name__ == "__main__":
     # 定义光源
     light_source = {
         'position': [0.0, 0.0, 0],   # 光源位置
-        'ambient': [0.7, 0.7, 0.7],   # 环境光强度（调低一点，因为物体自带环境色）
-        'diffuse': [0.3, 0.3, 0.3],   # 漫反射光强度
+        'ambient': [0.2, 0.2, 0.2],   # 环境光强度（调低一点，因为物体自带环境色）
+        'diffuse': [0.4, 0.4, 0.4],   # 漫反射光强度
         'specular': [0.0, 0.0, 0.0]   # 镜面反射光强度
     }
 
@@ -699,8 +645,8 @@ if __name__ == "__main__":
     material = {
         # 'ambient': [0.1, 0.6, 0.1], # 不再使用
         # 'diffuse': [0.1, 0.8, 0.1], # 不再使用
-        'specular': [0.0, 0.0, 0.0], # 镜面反射颜色/系数 (白色高光)
-        'shininess': 32.0             # 高光指数 (控制高光大小和锐度)
+        'specular': [1, 1, 1], # 镜面反射颜色/系数 (白色高光)
+        'shininess': 3.0             # 高光指数 (控制高光大小和锐度)
     }
 
     # 观察者位置 (与光源位置相同，模拟头灯效果)
@@ -721,7 +667,7 @@ if __name__ == "__main__":
         shadow_batch_size=200,
         shadow_epsilon= 1e-3,
         alignment_threshold=0.999,
-        attenuation_constant=7,
+        attenuation_constant=9,
         opacity = opacity_tensor ,
         ignore_first_n_hits=1
     )
