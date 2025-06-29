@@ -236,7 +236,7 @@ def example_from_file(  output_folder, points_npy_path, ply_file_path=None ):
             if points_input.dtype != np.float32:
                  points_input = points_input.astype(np.float32)
         elif actual_input_path.endswith('.pt'):
-            points_input = torch.load(actual_input_path)
+            points_input = torch.load(actual_input_path, weights_only=True)
             points_input = np.array(points_input)
             # 确保数据类型是 float32
             if points_input.dtype != np.float32:
@@ -270,10 +270,10 @@ def example_from_file(  output_folder, points_npy_path, ply_file_path=None ):
         # 注意：确保你的 compute_point_cloud_normals_remove_nan 函数存在且可用
         valid_normals, valid_indices, nan_indices_computed = compute_point_cloud_normals_remove_nan(
             points_input,
-            k=500,
+            k=200,
             orientation_k=30,
             orientation_method='neighbor_vector',
-            batch_size= int(2e5),
+            batch_size= int(3e5),
             device='cuda' # 确保你的函数支持这个设备
         )
 

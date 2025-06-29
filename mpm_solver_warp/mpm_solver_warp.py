@@ -334,6 +334,13 @@ class MPM_Simulator_WARP:
                 inputs=[self.mpm_model.nu, kwargs["nu"]],
                 device=device,
             )
+        if "alpha_0" in kwargs:
+            self.mpm_state.particle_Jp = wp.full( 
+                shape=self.n_particles,
+                value=kwargs["alpha_0"],
+                dtype=wp.float32,
+                device=device
+            )
         if "yield_stress" in kwargs:
             val = kwargs["yield_stress"]
             wp.launch(
@@ -834,6 +841,54 @@ class MPM_Simulator_WARP:
 
         self.grid_postprocess.append(collide)
         self.modify_bc.append(modify)
+        
+    def set_velocity_by_index(
+        self,
+        point,
+        size,
+        velocity,
+        start_time=0.0,
+        end_time=999.0,
+        reset=0,
+    ):
+        point = list(point)
+
+        collider_param = Dirichlet_collider()
+        collider_param.start_time = start_time
+        collider_param.end_time = end_time
+        collider_param.point = wp.vec3(point[0], point[1], point[2])
+        collider_param.size = size
+        collider_param.velocity = wp.vec3(velocity[0], velocity[1], velocity[2])
+        # collider_param.threshold = threshold
+        collider_param.reset = reset
+        self.collider_params.append(collider_param)
+
+        @wp.kernel
+        def set_particle_velocities(
+            time: float,
+            dt: float,
+            state: MPMStateStruct,
+            param: Dirichlet_collider,
+            threshold_index: int  # 粒子索引阈值
+        ):
+            p = wp.tid()  # 获取当前粒子的一维索引
+            if time >= param.start_time and time < param.end_time:
+                # 如果粒子索引超过阈值，则重置速度
+                if p >= threshold_index:
+                    state.particle_v[p] = wp.vec3(0.0, 0.0, 0.0)
+            elif param.reset == 1:
+                if time < param.end_time + 15.0 * dt and p >= threshold_index:
+                    state.particle_v[p] = wp.vec3(0.0, 0.0, 0.0)
+
+                def modify(time, dt, param: Dirichlet_collider):
+                    if time >= param.start_time and time < param.end_time:
+                        param.point = wp.vec3(
+                            param.point[0] + dt * param.velocity[0],
+                            param.point[1] + dt * param.velocity[1],
+                            param.point[2] + dt * param.velocity[2],
+                        )  # param.point + dt * param.velocity
+
+        self.grid_postprocess.append(set_particle_velocities)
 
     def add_bounding_box(self, start_time=0.0, end_time=999.0):
         collider_param = Dirichlet_collider()

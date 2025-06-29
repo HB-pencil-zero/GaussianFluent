@@ -1,6 +1,7 @@
 import sys
 
-sys.path.append("gaussian-splatting")
+sys.path.append("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/gaussian-splatting")
+sys.path.append("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian")
 
 import argparse
 import math

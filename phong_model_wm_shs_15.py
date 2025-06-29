@@ -267,8 +267,7 @@ def calculate_phong_colors_attenuated_shadowed_internal_batch(
         # 如果需要，也可以在这里保存原始 N_norm
         # np.save("N_norm_original.npy", N_norm.detach().cpu().numpy())
     
-    
-    # dot_nl_initial = torch.sum(N_norm * L, dim=1) # (N,)
+    # ambient_term[shadow_factors.squeeze(1) < 0.1] *= 0.8
 
     # # 2. 找出需要修正法线的点：被照亮 (shadow_factor > 0.5) 且 原始点积为负
     # #    使用 > 0.5 而不是 == 1.0 来允许浮点数误差
@@ -284,6 +283,7 @@ def calculate_phong_colors_attenuated_shadowed_internal_batch(
     # num_flipped = torch.sum(flip_mask).item()
     # if num_flipped > 0:
     #     print(f"信息: {num_flipped} 个被照亮点的法线因点积为负而被翻转。")
+    
     
     
     
@@ -490,6 +490,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_folder", type=str, required=True)
     parser.add_argument("--opacity_path", type=str, required=True)
     parser.add_argument("--valid_indice_path", type=str, required=True)
+    parser.add_argument("--shs_path", type=str, required=True)
+    parser.add_argument("--color_path", type=str, required=True)
     args = parser.parse_args()
     output_folder = args.output_folder 
     
@@ -498,7 +500,9 @@ if __name__ == "__main__":
     # 新的 PLY 文件，包含位置和法向量
     combined_ply_path = args.npy_path 
     # 原始的 PLY 文件，用于读取颜色 (f_dc 特征)
-    original_ply_path = "/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/watermelon/point_cloud/iteration_30000/point_cloud.ply"
+    # original_ply_path = "/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/watermelon/point_cloud/iteration_30000/point_cloud.ply"
+    shs_path = args.shs_path
+    color_path = args.color_path
     valid_indices = np.load(args.valid_indice_path)
     opacity_tensor = torch.load(args.opacity_path, weights_only=True).cuda()[torch.from_numpy(valid_indices)]
 
@@ -545,47 +549,22 @@ if __name__ == "__main__":
     print(f"读取位置和法向量耗时: {end_time - start_time:.2f}秒")
 
     # --- 2. 从原始 PLY 文件读取颜色信息 ---
-    print(f"正在从 '{original_ply_path}' 提取颜色 (f_dc)...")
     start_time = time.time()
-    try:
-        plydata_original = PlyData.read(original_ply_path)
-        vertex_element = plydata_original['vertex']
+    if color_path: 
+        point_rgb_colors_from_ply = torch.load(color_path, weights_only=True).detach().numpy()[valid_indices]        
+    else :
+        print(f"正在从 '{shs_path}' 提取颜色 (f_dc)...")
+        start_time = time.time()
+        features_dc = torch.load(shs_path, weights_only=True)[:, 0].detach().numpy()
+        C0 = 0.28209479177387814 # 球谐函数的零阶系数
+        # 将SH系数转换为[0, 1]范围的RGB值
 
-        # 检查原始文件的点数是否与组合文件匹配
-        num_points_original = len(vertex_element['x'])
-        # if num_points_original != len(points):
-        #     print(f"警告：原始颜色文件 '{original_ply_path}' 的点数 ({num_points_original}) 与组合文件 '{combined_ply_path}' 的点数 ({len(points)}) 不匹配！颜色可能无法正确对应。")
-        #     # 如果点数不匹配，无法安全地提取颜色，设置默认颜色
-        #     point_rgb_colors_from_ply = np.full((len(points), 3), 0.5) # 灰色
-        #     print("由于点数不匹配，使用了默认灰色。")
-        # else:
-        # 提取 f_dc 特征并计算 RGB 颜色
-        features_dc = np.zeros((num_points_original, 3))
-        # 检查属性是否存在
-        if "f_dc_0" not in vertex_element or "f_dc_1" not in vertex_element or "f_dc_2" not in vertex_element:
-                print(f"警告: 原始PLY文件 '{original_ply_path}' 缺少 'f_dc_0/1/2' 属性。将使用默认颜色。")
-                point_rgb_colors_from_ply = np.full((len(points), 3), 0.5) # 灰色
-        else:
-            features_dc[:, 0] = np.asarray(vertex_element["f_dc_0"])
-            features_dc[:, 1] = np.asarray(vertex_element["f_dc_1"])
-            features_dc[:, 2] = np.asarray(vertex_element["f_dc_2"])
-            C0 = 0.28209479177387814 # 球谐函数的零阶系数
-            # 将SH系数转换为[0, 1]范围的RGB值
+        point_rgb_colors_from_ply = np.clip(features_dc * C0 + 0.5, 0.0, 1.0)[valid_indices]
 
-            point_rgb_colors_from_ply = np.clip(features_dc * C0 + 0.5, 0.0, 1.0)[valid_indices]
-            # point_rgb_colors_from_ply = point_rgb_colors_from_ply[valid_indices]
-            print(f"从原始文件提取的颜色 (point_rgb_colors_from_ply) 形状: {point_rgb_colors_from_ply.shape}")
-
-    except FileNotFoundError:
-        print(f"警告：找不到原始颜色 PLY 文件 '{original_ply_path}'。将使用默认颜色。")
-        point_rgb_colors_from_ply = np.full((len(points), 3), 0.5) # 灰色
-    except Exception as e:
-        print(f"读取原始 PLY 文件 '{original_ply_path}' 或提取颜色时出错: {e}")
-        print("将使用默认颜色。")
-        point_rgb_colors_from_ply = np.full((len(points), 3), 0.5) # 灰色
-
+    print(f"从原始文件提取的颜色 (point_rgb_colors_from_ply) 形状: {point_rgb_colors_from_ply.shape}")
     end_time = time.time()
     print(f"提取颜色耗时: {end_time - start_time:.2f}秒")
+
 
     # --- 3. 可选：处理法向量 ---
     if normals is not None:
@@ -636,7 +615,7 @@ if __name__ == "__main__":
     # 定义光源
     light_source = {
         'position': [0.0, 0.0, 0],   # 光源位置
-        'ambient': [0.2, 0.2, 0.2],   # 环境光强度（调低一点，因为物体自带环境色）
+        'ambient': [0.7, 0.7, 0.7],   # 环境光强度（调低一点，因为物体自带环境色）
         'diffuse': [0.4, 0.4, 0.4],   # 漫反射光强度
         'specular': [0.0, 0.0, 0.0]   # 镜面反射光强度
     }
