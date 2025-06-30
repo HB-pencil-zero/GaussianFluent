@@ -49,16 +49,6 @@ ti.init(arch=ti.cuda, device_memory_GB=8.0, random_seed=42)
 
 import sys # 导入 sys 模块以使用 sys.stdout.flush()
 
-def azimith_round_array(max_delta,  stage_num , start_azimith):
-    list1 = [ max_delta * i / stage_num for i in range(stage_num)]
-    list2 = [ max_delta -  max_delta * i / stage_num for i in range(2*stage_num) ]
-    list4 = [-max_delta + max_delta * i / stage_num for i in range(stage_num) ]
-    return start_azimith + np.array(list1 + list2 + list4)
-
-def  elevation_round_array(max_delta,  stage_num , start_elevation): 
-    list1 = [max_delta* i / stage_num  for i in range(2*stage_num)]
-    list2 = [2 * max_delta - max_delta * i / stage_num  for i in range(2*stage_num)]
-    return start_elevation + np.array(list1 + list2)
 
 # def azimith_and_elvation_array(start_azimith, azimith_max_delta, start_elevation, elevation_max_delta , stage_num):
 #     return azimith_round_array(azimith_max_delta, stage_num, start_azimith ),  elevation_round_array(elevation_max_delta, stage_num, start_elevation)
@@ -98,116 +88,6 @@ def  elevation_round_array(max_delta,  stage_num , start_elevation):
 #     elevation_values = start_elevation + elevation_max_delta * np.sin(t)
 
 #     return azimuth_values, elevation_values
-
-def azimith_and_elvation_array(
-    start_azimith,      # 起始方位角，也是路径的第一个方位角
-    azimith_max_delta,  # 方位角方向的半径
-    start_elevation,    # 起始俯仰角，路径的第一个俯仰角，也是椭圆的最低点
-    elevation_max_delta, # 俯仰角方向的半径 (椭圆将从 start_elevation 向上扩展)
-    stage_num
-):
-    """
-    生成圆形（或椭圆形）采样路径的方位角和俯仰角数组。
-    此版本中，(start_azimith, start_elevation) 是路径的第一个点，
-    并且是椭圆路径的最低点。
-
-    参数:
-        start_azimith (float): 起始方位角。路径的第一个方位角值。
-        azimith_max_delta (float): 方位角方向的半径。
-        start_elevation (float): 起始俯仰角。路径的第一个俯仰角值，
-                                 同时也是椭圆路径的最低俯仰角。
-        elevation_max_delta (float): 俯仰角方向的半径。椭圆的最高点将比最低点高 2*elevation_max_delta。
-                                     假定为非负值。
-        stage_num (int): 用于确定椭圆路径上的点数。总点数将是 4 * stage_num。
-                         如果 stage_num <= 0, 只返回起始点。
-
-    返回:
-        一个元组 (azimuth_array, elevation_array)。
-    """
-    num_total_points = 4 * stage_num
-
-    if num_total_points <= 0:
-        # 如果 stage_num <= 0, 返回起始点本身。
-        return np.array([start_azimith]), np.array([start_elevation])
-
-    # 确定椭圆的中心
-    # 方位角中心与 start_azimith 一致
-    ellipse_center_az = start_azimith
-    # 俯仰角中心在 start_elevation 上方 elevation_max_delta 处，
-    # 这样当 sin(t) = -1 时，俯仰角为 start_elevation。
-    ellipse_center_el = start_elevation + elevation_max_delta
-
-    # 生成角度参数 t。
-    # 为了使 (start_azimith, start_elevation) 成为路径的第一个点和最低点，
-    # 我们需要 t 的初始值使得：
-    # cos(t_initial) 对于方位角部分在特定情况下为0 (如果椭圆的最低点对应方位角中轴线)
-    # sin(t_initial) = -1 对于俯仰角部分。
-    # 这对应于角度 -np.pi / 2 (或 3 * np.pi / 2)。
-    # 我们从 -np.pi / 2 开始，生成一个完整的 2*pi 周期。
-    
-    # 参数 t 的范围从 -pi/2 到 -pi/2 + 2pi (不包含端点)
-    # 这确保了当 t = -pi/2 时，我们得到最低点。
-    # cos(-pi/2) = 0
-    # sin(-pi/2) = -1
-    start_angle = -np.pi / 2
-    t_values = np.linspace(
-        start_angle,
-        start_angle + 2 * np.pi,
-        num_total_points,
-        endpoint=False  # 不包括周期的结束点，以避免与起点重复
-    )
-
-    # 计算椭圆路径上的方位角和俯仰角值
-    # 方位角: ellipse_center_az + azimith_max_delta * cos(t)
-    # 当 t = -pi/2 (第一个点):
-    # az = ellipse_center_az + azimith_max_delta * 0 = ellipse_center_az = start_azimith
-    azimuth_values = ellipse_center_az + azimith_max_delta * np.cos(t_values)
-    
-    # 俯仰角: ellipse_center_el + elevation_max_delta * sin(t)
-    # 当 t = -pi/2 (第一个点):
-    # el = ellipse_center_el + elevation_max_delta * (-1)
-    #    = (start_elevation + elevation_max_delta) - elevation_max_delta
-    #    = start_elevation
-    elevation_values = ellipse_center_el + elevation_max_delta * np.sin(t_values)
-
-    return azimuth_values, elevation_values
-
-
-def uniform_linear_transition_az_el(
-    start_azimith,
-    target_azimith,
-    start_elevation,
-    target_elevation,
-    stage_num  # 在此函数中，这代表过渡序列中的总点数
-):
-    """
-    生成从起始方位角/俯仰角到目标方位角/俯仰角的均匀线性过渡序列。
-
-    参数:
-        start_azimith (float): 起始方位角。
-        target_azimith (float): 目标方位角。
-        start_elevation (float): 起始俯仰角。
-        target_elevation (float): 目标俯仰角。
-        stage_num (int):      生成的过渡点数量（包括起始点和目标点）。
-                              - 如果 stage_num = 1, 返回包含起始点的数组。
-                              - 如果 stage_num = 0, 返回空数组。
-                              - stage_num 必须是非负整数。
-
-    返回:
-        一个元组 (azimuth_array, elevation_array)，分别包含方位角和俯仰角的 NumPy 数组。
-    """
-    if not isinstance(stage_num, int) or stage_num < 0:
-        raise ValueError("stage_num 必须是一个非负整数。")
-
-    if stage_num == 0:
-        return np.array([]), np.array([])
-    
-    # np.linspace 在 stage_num=1 时会返回包含起始值的数组，
-    # 在 stage_num > 1 时会返回包含起始点和目标点的 stage_num 个均匀分布的点。
-    azimuth_values = np.linspace(start_azimith, target_azimith, stage_num)
-    elevation_values = np.linspace(start_elevation, target_elevation, stage_num)
-    
-    return azimuth_values, elevation_values
 
 
 
@@ -826,7 +706,7 @@ if __name__ == "__main__":
             observant_coordinates=observant_coordinates,
             show_hint=camera_params["show_hint"],
             init_azimuthm=azimith_list[frame],
-            init_elevation=elevation_list[frame] + 5,
+            init_elevation=elevation_list[frame],
             init_radius=camera_params["init_radius"],
             move_camera=camera_params["move_camera"],
             current_frame=frame,

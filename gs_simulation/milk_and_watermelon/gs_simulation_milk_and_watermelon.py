@@ -536,6 +536,43 @@ if __name__ == "__main__":
     opacity_render3_unselect = opacity_render3[~pos3_mask]
     shs_render3_unselect = shs_render3[~pos3_mask]
 
+    opacity_render = opacity
+    shs_render = shs
+    opacity_render = torch.concat([opacity_render, loaded_data['opacity_render'], opacity_render3_select], dim=0)
+    shs_render =  torch.concat([shs_render, loaded_data['shs_render'], shs_render3_select], dim=0)
+    
+    
+    # mpm_init_pos,  mpm_init_cov, mpm_init_vol,   opacity_render, shs_render = append_gaussian_data_flexible(
+    #     "/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/kiwi",
+    #     original_mean_pos,
+    #     scale_origin,
+    #     mpm_init_pos,
+    #     mpm_init_cov,
+    #     mpm_init_vol,
+    #     opacity_render,
+    #     shs_render,
+    #     material_params,
+    #     mpm_init_pos.device,
+    #     position_offset = torch.Tensor([2.5, 3.8, 1.5]).cuda()
+    # ) 
+
+
+    # mpm_init_pos,  mpm_init_cov, mpm_init_vol,   opacity_render, shs_render = append_gaussian_data_flexible(
+    #     "/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/dragonfruit",
+    #     original_mean_pos,
+    #     scale_origin,
+    #     mpm_init_pos,
+    #     mpm_init_cov,
+    #     mpm_init_vol,
+    #     opacity_render,
+    #     shs_render,
+    #     material_params,
+    #     mpm_init_pos.device,
+    #     position_offset = torch.Tensor([3.1, 2.5, 1.8]).cuda()
+    # ) 
+
+
+
     mpm_solver.load_initial_data_from_torch(
         mpm_init_pos,
         mpm_init_vol,
@@ -632,11 +669,11 @@ if __name__ == "__main__":
     frame_dt = time_params["frame_dt"]
     frame_num = time_params["frame_num"]
     step_per_frame = int(frame_dt / substep_dt)
-    opacity_render = opacity
-    shs_render = shs
+    # opacity_render = opacity
+    # shs_render = shs
     
-    opacity_render = torch.concat([opacity_render, loaded_data['opacity_render'], opacity_render3_select], dim=0)
-    shs_render =  torch.concat([shs_render, loaded_data['shs_render'], shs_render3_select], dim=0)
+    # opacity_render = torch.concat([opacity_render, loaded_data['opacity_render'], opacity_render3_select], dim=0)
+    # shs_render =  torch.concat([shs_render, loaded_data['shs_render'], shs_render3_select], dim=0)
     
     height = None
     width = None

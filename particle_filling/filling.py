@@ -3,7 +3,10 @@ import os
 import numpy as np
 import taichi as ti
 import mcubes
-
+import sys
+sys.path.append("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/gaussian-splatting")
+from scene.gaussian_model import GaussianModel
+from utils.system_utils import searchForMaxIteration
 # 1. densify grids
 # 2. identify grids whose density is larger than some threshold
 # 3. filling grids with particles
@@ -270,6 +273,21 @@ def assign_particle_to_grid(
         ti.atomic_add(grid[i, j, k], 1)
 
 
+
+def load_checkpoint(model_path, sh_degree=3, iteration=-1):
+    # Find checkpoint
+    checkpt_dir = os.path.join(model_path, "point_cloud")
+    if iteration == -1:
+        iteration = searchForMaxIteration(checkpt_dir)
+    checkpt_path = os.path.join(
+        checkpt_dir, f"iteration_{iteration}", "point_cloud.ply"
+    )
+
+    # Load guassians
+    gaussians = GaussianModel(sh_degree)
+    gaussians.load_ply(checkpt_path)
+    return gaussians
+
 def get_particle_volume(pos, grid_n: int, grid_dx: float, unifrom: bool = False):
     ti_pos = ti.Vector.field(n=3, dtype=float, shape=pos.shape[0])
     ti_pos.from_torch(pos.reshape(-1, 3))
@@ -286,6 +304,144 @@ def get_particle_volume(pos, grid_n: int, grid_dx: float, unifrom: bool = False)
         return vol
     else:
         return particle_vol.to_torch()
+
+
+
+def append_gaussian_data_flexible(
+    gs_filepath: str,
+    original_mean_pos: torch.Tensor,
+    scale_origin: float,
+    mpm_init_pos: torch.Tensor,
+    mpm_init_cov: torch.Tensor,
+    mpm_init_vol: torch.Tensor,
+    opacity_render: torch.Tensor,
+    shs_render: torch.Tensor,
+    material_params: dict,
+    device: torch.device,
+    scales: float = 1.0 ,
+    position_offset: torch.Tensor =  None,
+    transform_file: str = None,
+):
+    """
+    加载、转换并追加一个新的高斯物体数据，提供更灵活的位置控制。
+
+    Args:
+        ... (同上) ...
+        align_to_xy_center (bool): 是否将新物体对齐到原物体的 XY 中心。默认为 True。
+        position_offset (Optional[torch.Tensor]): 一个 (x, y, z) 的偏移向量，施加在对齐之后。
+                                                   如果为 None，则使用默认的 z 轴 +1.05 偏移。
+
+    Returns:
+        拼接了新数据后的 (位置, 协方差, 体积) 张量元组。
+    """
+    # 假设这些辅助函数已经定义在别处
+    # from your_utils import load_core_init_render_vars, get_particle_volume
+
+    gaussians = load_checkpoint(gs_filepath)
+    
+    pos2 = gaussians._xyz.detach().clone()
+    
+    if transform_file:
+        transform_matrix = torch.from_numpy(np.loadtxt("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden/transform_matrix.txt")).to(device).float()
+        pos2 = pos2  @ transform_matrix[:3, :3].T  + transform_matrix[:3, 3]
+    pos2 = (pos2 - original_mean_pos) *  scale_origin 
+    
+    
+    if position_offset is not None:
+        pos2 += position_offset.to(device=device)
+    
+    pos2 = pos2.to(device=device)
+    
+    cov2 = gaussians.get_covariance().detach().clone()
+    cov2 = cov2.to(device=device)
+
+    shs2 = gaussians.get_features 
+    opacity2 = gaussians.get_opacity
+
+
+    pos2 = (pos2 - pos2.mean(dim=0)) * scales + pos2.mean(dim=0)
+    cov2 = cov2 * (scales**2)
+
+    vol2 = get_particle_volume(
+        pos2,
+        material_params["n_grid"],
+        material_params["grid_lim"] / material_params["n_grid"],
+        unifrom=material_params["material"] == "sand",
+    ).to(device=device)
+
+    updated_pos = torch.concat([mpm_init_pos, pos2], dim=0)
+    updated_cov = torch.concat([mpm_init_cov, cov2], dim=0)
+    updated_vol = torch.concat([mpm_init_vol, vol2], dim=0)
+    opacity_render = torch.concat([opacity_render, opacity2], dim=0)
+    shs_render = torch.concat([shs_render, shs2], dim=0)
+
+    return updated_pos, updated_cov, updated_vol, opacity_render, shs_render
+
+
+
+
+def append_gaussian_data_flexible_after_simulation(
+    gs_filepath: str,
+    pos: torch.Tensor,
+    cov: torch.Tensor,
+    rot: torch.Tensor,
+    opacity_render: torch.Tensor,
+    shs_render: torch.Tensor,
+    device: torch.device,
+    scales: float = 1.0 ,
+    position_offset: list =  None,
+):
+    """
+    加载、转换并追加一个新的高斯物体数据，提供更灵活的位置控制。
+
+    Args:
+        ... (同上) ...
+        align_to_xy_center (bool): 是否将新物体对齐到原物体的 XY 中心。默认为 True。
+        position_offset (Optional[torch.Tensor]): 一个 (x, y, z) 的偏移向量，施加在对齐之后。
+                                                   如果为 None，则使用默认的 z 轴 +1.05 偏移。
+
+    Returns:
+        拼接了新数据后的 (位置, 协方差, 体积) 张量元组。
+    """
+    # 假设这些辅助函数已经定义在别处
+    # from your_utils import load_core_init_render_vars, get_particle_volume
+
+    gaussians = load_checkpoint(gs_filepath)
+    
+    pos2 = gaussians._xyz.detach().clone()
+    
+    
+    
+    if position_offset is not None:
+        position_offset = torch.tensor(position_offset).to(pos2.device)
+        pos2 += position_offset.to(device=device)
+    
+    pos2 = pos2.to(device=device)
+    
+    cov2 = gaussians.get_covariance().detach().clone()
+    cov2 = cov2.to(device=device)
+
+    shs2 = gaussians.get_features 
+    opacity2 = gaussians.get_opacity
+
+
+    pos2 = (pos2 - pos2.mean(dim=0)) * scales + pos2.mean(dim=0)
+    cov2 = cov2 * (scales**2)   
+    
+    rot2 =  torch.eye(3, device="cuda").expand(gaussians._xyz.shape[0], 3, 3)
+
+
+    updated_pos = torch.concat([pos, pos2], dim=0)
+    updated_cov = torch.concat([cov, cov2], dim=0)
+    updated_vol = torch.concat([rot, rot2], dim=0)
+    opacity_render = torch.concat([opacity_render, opacity2], dim=0)
+    shs_render = torch.concat([shs_render, shs2], dim=0)
+
+    return updated_pos, updated_cov, updated_vol, opacity_render, shs_render
+
+
+
+
 
 
 def fill_particles(

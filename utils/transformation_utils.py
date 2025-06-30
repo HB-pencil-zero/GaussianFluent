@@ -2,6 +2,12 @@ import torch
 import numpy as np
 from utils.camera_view_utils import *
 from typing import Optional
+from particle_filling.filling import *
+import sys
+sys.path.append("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/gaussian-splatting")
+from utils.sh_utils import eval_sh
+
+
 
 def save_core_init_render_vars(
     filepath: str,
@@ -87,65 +93,6 @@ def load_core_init_render_vars(
 import torch
 torch.backends.cuda.preferred_linalg_library('cusolver')  # 或者 'magma'
 
-# 或者强制使用 CPU 进行线性代数运算
-def decompose_covariance_to_scaling_rotation(symm, scaling_modifier):
-    n = symm.shape[0]
-    device = symm.device
-    
-    # 重建协方差矩阵
-    cov = torch.zeros((n, 3, 3), device=device)
-    cov[:, 0, 0] = symm[:, 0]
-    cov[:, 0, 1] = cov[:, 1, 0] = symm[:, 1]
-    cov[:, 0, 2] = cov[:, 2, 0] = symm[:, 2]
-    cov[:, 1, 1] = symm[:, 3]
-    cov[:, 1, 2] = cov[:, 2, 1] = symm[:, 4]
-    cov[:, 2, 2] = symm[:, 5]
-    
-    # 转到 CPU 进行线性代数运算
-    cov_cpu = cov.cpu()
-    
-    # 特征值分解
-    eigenvalues, eigenvectors = torch.linalg.eigh(cov_cpu)
-    eigenvalues = torch.clamp(eigenvalues, min=1e-6)
-    
-    # 重构 L
-    sqrt_eigenvalues = torch.sqrt(eigenvalues)
-    L = eigenvectors * sqrt_eigenvalues.unsqueeze(-2)
-    
-    # SVD 分解
-    U, S, Vh = torch.linalg.svd(L)
-    
-    # 确保旋转矩阵的行列式为正
-    det = torch.det(U @ Vh)
-    U = torch.where(det.unsqueeze(-1).unsqueeze(-1) < 0,
-                    torch.cat([U[:, :, :-1], -U[:, :, -1:]], dim=-1), U)
-    S = torch.where(det.unsqueeze(-1) < 0,
-                    torch.cat([S[:, :-1], -S[:, -1:]], dim=-1), S)
-    
-    # 转回原设备
-    R = (U @ Vh).to(device)
-    scaling = (S / scaling_modifier).to(device)
-    rotation = matrix_to_quaternion(R)
-    
-    return scaling, rotation
-
-
-def matrix_to_quaternion(R):
-    """旋转矩阵转四元数"""
-    trace = R[:, 0, 0] + R[:, 1, 1] + R[:, 2, 2]
-    
-    q = torch.zeros((R.shape[0], 4), device=R.device)
-    
-    # w分量
-    q[:, 0] = torch.sqrt(torch.clamp(1 + trace, min=0)) / 2
-    
-    # xyz分量
-    q[:, 1] = (R[:, 2, 1] - R[:, 1, 2]) / (4 * q[:, 0])
-    q[:, 2] = (R[:, 0, 2] - R[:, 2, 0]) / (4 * q[:, 0])
-    q[:, 3] = (R[:, 1, 0] - R[:, 0, 1]) / (4 * q[:, 0])
-    
-    return q
-
 
 def calculate_minimum_bounding_box_torch(
     positions: torch.Tensor,
@@ -206,6 +153,7 @@ def calculate_minimum_bounding_box_torch(
         # print(f"   - (如果应用钳位) 调整后的半尺寸: {size.tolist()}")
 
     return point, size
+
 
 
 
@@ -372,3 +320,217 @@ def get_center_view_worldspace_and_observant_coordinate(
     observant_coordinates = np.column_stack((h1, h2, vertical))
 
     return viewpoint_center_worldspace, observant_coordinates
+
+
+def save_prop_dict(
+        save_file: str,
+        pos: torch.Tensor,
+        cov3D: torch.Tensor,
+        rot: torch.Tensor,
+        opacity: torch.Tensor,
+        shs: torch.Tensor
+): 
+    save_dir = os.path.dirname(save_file)
+    if save_dir and not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    # 创建一个字典来存储所有属性
+    # .detach(): 将张量从当前的计算图中分离出来。
+    #            这样，保存的张量就不再需要梯度信息，变得更轻量。
+    # .cpu():    将张量从GPU转移到CPU。
+    #            这是一种好的实践，可以确保保存的文件在没有GPU的机器上也能被加载。
+    prop_dict = {
+        'pos': pos.detach().cpu(),
+        'cov3D': cov3D.detach().cpu(),
+        'rot': rot.detach().cpu(),
+        'opacity': opacity.detach().cpu(),
+        'shs': shs.detach().cpu()
+    }
+
+    # 使用 torch.save 保存字典
+    torch.save(prop_dict, save_file)
+    print(f"属性字典已成功保存到: {save_file}")
+
+
+def load_and_concat_prop_dict(
+        load_file: str,
+        pos: torch.Tensor,
+        cov3D: torch.Tensor,
+        rot: torch.Tensor,
+        opacity: torch.Tensor,
+        shs: torch.Tensor, # 修正了 Tnesor -> Tensor
+        bias: list = None,
+):
+    """
+    从文件加载属性字典，并将其中的张量与传入的现有张量沿第一个维度拼接。
+
+    Args:
+        load_file (str): 要加载的属性字典文件路径。
+        pos, cov3D, rot, opacity, shs (torch.Tensor): 已存在于内存中的张量，
+                                                     将与从文件中加载的张量进行拼接。
+
+    """
+    if not os.path.exists(load_file):
+        print(f"错误: 文件不存在 -> {load_file}")
+        return None
+
+    # 从内存中的张量推断出目标设备
+    target_device = pos.device
+
+
+        # 1. 安全地加载文件内容到CPU
+    loaded_dict = torch.load(load_file, map_location='cpu')
+
+    if not isinstance(loaded_dict, dict):
+        print(f"错误: 文件 '{load_file}' 的内容不是一个字典。")
+        return None
+
+    # 2. 将内存中的现有张量组织成一个字典，方便按键名访问
+    input_tensors = {
+        'pos': pos, 'cov3D': cov3D, 'rot': rot,
+        'opacity': opacity, 'shs': shs
+    }
+
+    concatenated_dict = {}
+    if bias is not None: 
+        bias = torch.tensor(bias).to(pos.device)
+        input_tensors['pos'] += bias 
+    # 3. 遍历每个属性键，进行拼接
+    for key in input_tensors.keys():
+
+        # 获取文件中的张量和内存中的张量
+        tensor_from_file = loaded_dict[key]
+        tensor_from_memory = input_tensors[key]
+
+        # 4. 将从文件加载的张量移动到目标设备，然后使用 torch.cat 拼接
+        #    torch.cat 的输入是一个张量列表。dim=0 表示沿着第一个维度（通常是数量维度）拼接。
+        concatenated_dict[key] = torch.cat([
+            tensor_from_memory,
+            tensor_from_file.to(target_device)
+        ], dim=0)
+
+    return concatenated_dict['pos'], concatenated_dict['cov3D'], concatenated_dict['rot'], concatenated_dict['opacity'], concatenated_dict['shs']
+
+
+def azimith_round_array(max_delta,  stage_num , start_azimith):
+    list1 = [ max_delta * i / stage_num for i in range(stage_num)]
+    list2 = [ max_delta -  max_delta * i / stage_num for i in range(2*stage_num) ]
+    list4 = [-max_delta + max_delta * i / stage_num for i in range(stage_num) ]
+    return start_azimith + np.array(list1 + list2 + list4)
+
+def  elevation_round_array(max_delta,  stage_num , start_elevation): 
+    list1 = [max_delta* i / stage_num  for i in range(2*stage_num)]
+    list2 = [2 * max_delta - max_delta * i / stage_num  for i in range(2*stage_num)]
+    return start_elevation + np.array(list1 + list2)
+
+
+def azimith_and_elvation_array(
+    start_azimith,      # 起始方位角，也是路径的第一个方位角
+    azimith_max_delta,  # 方位角方向的半径
+    start_elevation,    # 起始俯仰角，路径的第一个俯仰角，也是椭圆的最低点
+    elevation_max_delta, # 俯仰角方向的半径 (椭圆将从 start_elevation 向上扩展)
+    stage_num
+):
+    """
+    生成圆形（或椭圆形）采样路径的方位角和俯仰角数组。
+    此版本中，(start_azimith, start_elevation) 是路径的第一个点，
+    并且是椭圆路径的最低点。
+
+    参数:
+        start_azimith (float): 起始方位角。路径的第一个方位角值。
+        azimith_max_delta (float): 方位角方向的半径。
+        start_elevation (float): 起始俯仰角。路径的第一个俯仰角值，
+                                 同时也是椭圆路径的最低俯仰角。
+        elevation_max_delta (float): 俯仰角方向的半径。椭圆的最高点将比最低点高 2*elevation_max_delta。
+                                     假定为非负值。
+        stage_num (int): 用于确定椭圆路径上的点数。总点数将是 4 * stage_num。
+                         如果 stage_num <= 0, 只返回起始点。
+
+    返回:
+        一个元组 (azimuth_array, elevation_array)。
+    """
+    num_total_points = 4 * stage_num
+
+    if num_total_points <= 0:
+        # 如果 stage_num <= 0, 返回起始点本身。
+        return np.array([start_azimith]), np.array([start_elevation])
+
+    # 确定椭圆的中心
+    # 方位角中心与 start_azimith 一致
+    ellipse_center_az = start_azimith
+    # 俯仰角中心在 start_elevation 上方 elevation_max_delta 处，
+    # 这样当 sin(t) = -1 时，俯仰角为 start_elevation。
+    ellipse_center_el = start_elevation + elevation_max_delta
+
+    # 生成角度参数 t。
+    # 为了使 (start_azimith, start_elevation) 成为路径的第一个点和最低点，
+    # 我们需要 t 的初始值使得：
+    # cos(t_initial) 对于方位角部分在特定情况下为0 (如果椭圆的最低点对应方位角中轴线)
+    # sin(t_initial) = -1 对于俯仰角部分。
+    # 这对应于角度 -np.pi / 2 (或 3 * np.pi / 2)。
+    # 我们从 -np.pi / 2 开始，生成一个完整的 2*pi 周期。
+    
+    # 参数 t 的范围从 -pi/2 到 -pi/2 + 2pi (不包含端点)
+    # 这确保了当 t = -pi/2 时，我们得到最低点。
+    # cos(-pi/2) = 0
+    # sin(-pi/2) = -1
+    start_angle = -np.pi / 2
+    t_values = np.linspace(
+        start_angle,
+        start_angle + 2 * np.pi,
+        num_total_points,
+        endpoint=False  # 不包括周期的结束点，以避免与起点重复
+    )
+
+    # 计算椭圆路径上的方位角和俯仰角值
+    # 方位角: ellipse_center_az + azimith_max_delta * cos(t)
+    # 当 t = -pi/2 (第一个点):
+    # az = ellipse_center_az + azimith_max_delta * 0 = ellipse_center_az = start_azimith
+    azimuth_values = ellipse_center_az + azimith_max_delta * np.cos(t_values)
+    
+    # 俯仰角: ellipse_center_el + elevation_max_delta * sin(t)
+    # 当 t = -pi/2 (第一个点):
+    # el = ellipse_center_el + elevation_max_delta * (-1)
+    #    = (start_elevation + elevation_max_delta) - elevation_max_delta
+    #    = start_elevation
+    elevation_values = ellipse_center_el + elevation_max_delta * np.sin(t_values)
+
+    return azimuth_values, elevation_values
+
+
+def uniform_linear_transition_az_el(
+    start_azimith,
+    target_azimith,
+    start_elevation,
+    target_elevation,
+    stage_num  # 在此函数中，这代表过渡序列中的总点数
+):
+    """
+    生成从起始方位角/俯仰角到目标方位角/俯仰角的均匀线性过渡序列。
+
+    参数:
+        start_azimith (float): 起始方位角。
+        target_azimith (float): 目标方位角。
+        start_elevation (float): 起始俯仰角。
+        target_elevation (float): 目标俯仰角。
+        stage_num (int):      生成的过渡点数量（包括起始点和目标点）。
+                              - 如果 stage_num = 1, 返回包含起始点的数组。
+                              - 如果 stage_num = 0, 返回空数组。
+                              - stage_num 必须是非负整数。
+
+    返回:
+        一个元组 (azimuth_array, elevation_array)，分别包含方位角和俯仰角的 NumPy 数组。
+    """
+    if not isinstance(stage_num, int) or stage_num < 0:
+        raise ValueError("stage_num 必须是一个非负整数。")
+
+    if stage_num == 0:
+        return np.array([]), np.array([])
+    
+    # np.linspace 在 stage_num=1 时会返回包含起始值的数组，
+    # 在 stage_num > 1 时会返回包含起始点和目标点的 stage_num 个均匀分布的点。
+    azimuth_values = np.linspace(start_azimith, target_azimith, stage_num)
+    elevation_values = np.linspace(start_elevation, target_elevation, stage_num)
+    
+    return azimuth_values, elevation_values
+
