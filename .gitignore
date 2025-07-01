@@ -15,3 +15,6 @@ phong_model_wm_shs.py
 phong_shadow.py
 shutil_proc.py
 save_tensor/
+*.pt
+crop_png.py
+shadow_kernel.cu
