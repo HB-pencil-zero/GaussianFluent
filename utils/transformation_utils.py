@@ -379,7 +379,7 @@ def load_and_concat_prop_dict(
 
 
         # 1. 安全地加载文件内容到CPU
-    loaded_dict = torch.load(load_file, map_location='cpu')
+    loaded_dict = torch.load(load_file, map_location='cpu', weights_only=True)
 
     if not isinstance(loaded_dict, dict):
         print(f"错误: 文件 '{load_file}' 的内容不是一个字典。")
@@ -410,6 +410,38 @@ def load_and_concat_prop_dict(
         ], dim=0)
 
     return concatenated_dict['pos'], concatenated_dict['cov3D'], concatenated_dict['rot'], concatenated_dict['opacity'], concatenated_dict['shs']
+
+
+def load_prop_dict(
+        load_file: str,
+):
+    """
+    从文件加载属性字典，并将其中的张量与传入的现有张量沿第一个维度拼接。
+
+    Args:
+        load_file (str): 要加载的属性字典文件路径。
+        pos, cov3D, rot, opacity, shs (torch.Tensor): 已存在于内存中的张量，
+                                                     将与从文件中加载的张量进行拼接。
+
+    """
+    if not os.path.exists(load_file):
+        print(f"错误: 文件不存在 -> {load_file}")
+        return None
+
+    # 从内存中的张量推断出目标设备
+    target_device = 'cuda'
+
+
+        # 1. 安全地加载文件内容到CPU
+    concatenated_dict= torch.load(load_file, map_location='cuda', weights_only=True)
+
+    if not isinstance(concatenated_dict, dict):
+        print(f"错误: 文件 '{load_file}' 的内容不是一个字典。")
+        return None
+
+
+    return concatenated_dict['pos'], concatenated_dict['cov3D'], concatenated_dict['rot'], concatenated_dict['opacity'], concatenated_dict['shs']
+
 
 
 def azimith_round_array(max_delta,  stage_num , start_azimith):
@@ -498,6 +530,93 @@ def azimith_and_elvation_array(
     return azimuth_values, elevation_values
 
 
+def generate_and_append_ellipse_path(
+    start_azimuth,
+    azimuth_max_delta,
+    start_elevation,
+    elevation_max_delta,
+    path_radius,         # 新增: 这段路径的固定半径
+    path_center,         # 新增: 这段路径的固定3D中心点
+    stage_num,
+    existing_azimuths=None,
+    existing_elevations=None,
+    existing_radii=None,
+    existing_centers=None,
+):
+    """
+    生成椭圆路径并追加，处理完整的相机位姿参数。
+    """
+    # --- Part 1: 生成新路径 ---
+    num_new_points = 4 * stage_num
+    if num_new_points <= 0:
+        new_azimuths_np = np.array([start_azimuth])
+        new_elevations_np = np.array([start_elevation])
+        new_radii_list = [path_radius]
+        new_centers_list = [list(path_center)] # 确保是列表
+    else:
+        ellipse_center_az = start_azimuth
+        ellipse_center_el = start_elevation + elevation_max_delta
+        start_angle = -np.pi / 2
+        t_values = np.linspace(start_angle, start_angle + 2 * np.pi, num_new_points, endpoint=False)
+        
+        new_azimuths_np = ellipse_center_az + azimuth_max_delta * np.cos(t_values)
+        new_elevations_np = ellipse_center_el + elevation_max_delta * np.sin(t_values)
+        
+        # 为新生成的每个点都记录相同的半径和中心
+        new_radii_list = [path_radius] * num_new_points
+        new_centers_list = [list(path_center)] * num_new_points # 确保是列表
+
+    # --- Part 2: 拼接数据 ---
+    final_azimuths = (existing_azimuths or []) + new_azimuths_np.tolist()
+    final_elevations = (existing_elevations or []) + new_elevations_np.tolist()
+    final_radii = (existing_radii or []) + new_radii_list
+    final_centers = (existing_centers or []) + new_centers_list
+    
+    return final_azimuths, final_elevations, final_radii, final_centers
+
+def linear_transition_and_append(
+    start_pose,   # (start_az, start_el, start_radius, start_center)
+    target_pose,  # (target_az, target_el, target_radius, target_center)
+    stage_num,
+    existing_azimuths=None,
+    existing_elevations=None,
+    existing_radii=None,
+    existing_centers=None,
+):
+    """
+    在两个完整的相机位姿之间进行线性插值，并追加结果。
+    """
+    if not isinstance(stage_num, int) or stage_num < 0:
+        raise ValueError("stage_num 必须是一个非负整数。")
+
+    # --- Part 1: 生成新路径 ---
+    if stage_num == 0:
+        return (existing_azimuths or []), (existing_elevations or []), (existing_radii or []), (existing_centers or [])
+
+    start_az, start_el, start_radius, start_center = start_pose
+    target_az, target_el, target_radius, target_center = target_pose
+    
+    # 对所有参数进行线性插值
+    new_azimuths_np = np.linspace(start_az, target_az, stage_num)
+    new_elevations_np = np.linspace(start_el, target_el, stage_num)
+    new_radii_np = np.linspace(start_radius, target_radius, stage_num)
+    
+    # 对3D中心点进行插值
+    start_center_np = np.asarray(start_center)
+    target_center_np = np.asarray(target_center)
+    # 使用Numpy的广播机制进行线性插值
+    t = np.linspace(0, 1, stage_num).reshape(-1, 1)
+    new_centers_np = (1 - t) * start_center_np + t * target_center_np
+
+    # --- Part 2: 拼接数据 ---
+    final_azimuths = (existing_azimuths or []) + new_azimuths_np.tolist()
+    final_elevations = (existing_elevations or []) + new_elevations_np.tolist()
+    final_radii = (existing_radii or []) + new_radii_np.tolist()
+    final_centers = (existing_centers or []) + new_centers_np.tolist()
+
+    return final_azimuths, final_elevations, final_radii, final_centers
+
+
 def uniform_linear_transition_az_el(
     start_azimith,
     target_azimith,
@@ -534,3 +653,117 @@ def uniform_linear_transition_az_el(
     
     return azimuth_values, elevation_values
 
+
+
+def uniform_linear_transition(
+    start_azimuth: float,
+    target_azimuth: float,
+    start_elevation: float,
+    target_elevation: float,
+    start_radius: float,
+    target_radius: float,
+    stage_num: int  # 在此函数中，这代表过渡序列中的总点数
+):
+    """
+    生成从起始方位角/俯仰角到目标方位角/俯仰角的均匀线性过渡序列。
+
+    参数:
+        start_azimith (float): 起始方位角。
+        target_azimith (float): 目标方位角。
+        start_elevation (float): 起始俯仰角。
+        target_elevation (float): 目标俯仰角。
+        stage_num (int):      生成的过渡点数量（包括起始点和目标点）。
+                              - 如果 stage_num = 1, 返回包含起始点的数组。
+                              - 如果 stage_num = 0, 返回空数组。
+                              - stage_num 必须是非负整数。
+
+    返回:
+        一个元组 (azimuth_array, elevation_array)，分别包含方位角和俯仰角的 NumPy 数组。
+    """
+    if not isinstance(stage_num, int) or stage_num < 0:
+        raise ValueError("stage_num 必须是一个非负整数。")
+
+    if stage_num == 0:
+        return np.array([]), np.array([])
+    
+    # np.linspace 在 stage_num=1 时会返回包含起始值的数组，
+    # 在 stage_num > 1 时会返回包含起始点和目标点的 stage_num 个均匀分布的点。
+    azimuth_values = np.linspace(start_azimuth, target_azimuth, stage_num)
+    elevation_values = np.linspace(start_elevation, target_elevation, stage_num)
+    radius_values = np.linspace(start_radius, target_radius, stage_num) # 新
+    
+    return azimuth_values, elevation_values, radius_values
+
+
+def load_and_transform_single_gaussian(
+    gs_filepath: str,
+    device = 'cuda',
+    scale: float = 1.0,
+    position_offset = None,
+) :
+    """
+    加载单个高斯溅射模型，并对其进行缩放和位移变换。
+    """
+    gaussians = load_checkpoint(gs_filepath)
+    
+    pos = gaussians.get_xyz.detach().clone()
+    cov = gaussians.get_covariance().detach().clone()
+    opacity = gaussians.get_opacity.detach().clone()
+    shs = gaussians.get_features.detach().clone()
+    rot = torch.eye(3, device=device).unsqueeze(0).expand(pos.shape[0], 3, 3)
+
+    center = pos.mean(dim=0)
+    pos = (pos - center) * scale + center
+    cov = cov * (scale ** 2)
+    
+    if position_offset is not None:
+        if isinstance(position_offset, list):
+            position_offset = torch.tensor(position_offset, device=device, dtype=torch.float32)
+        pos += position_offset
+        
+    return pos, cov, rot, opacity, shs
+
+
+def create_combined_gaussian_scene(
+    object_configs,
+    device = 'cuda',
+) :
+    """
+    根据配置列表，加载、转换并拼接多个高斯物体，创建一个组合场景。
+    """
+    all_pos, all_cov, all_rot, all_opacity, all_shs = [], [], [], [], []
+
+    for config in object_configs:
+        filepath = config.get('filepath')
+        if not filepath:
+            raise ValueError("每个物体配置必须包含 'filepath'。")
+            
+        scale = config.get('scale', 1.0)
+        offset = config.get('offset', None)
+
+        pos, cov, rot, opacity, shs = load_and_transform_single_gaussian(
+            gs_filepath=filepath,
+            device=device,
+            scale=scale,
+            position_offset=offset
+        )
+        
+        all_pos.append(pos)
+        all_cov.append(cov)
+        all_rot.append(rot)
+        all_opacity.append(opacity)
+        all_shs.append(shs)
+
+    if not all_pos:
+        print("Warning: object_configs 列表为空，未创建任何物体。")
+        return {}
+
+    final_scene = {
+        'pos': torch.cat(all_pos, dim=0),
+        'cov': torch.cat(all_cov, dim=0),
+        'rot': torch.cat(all_rot, dim=0),
+        'opacity': torch.cat(all_opacity, dim=0),
+        'shs': torch.cat(all_shs, dim=0),
+    }
+    
+    return final_scene

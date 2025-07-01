@@ -40,7 +40,6 @@ from utils.transformation_utils import *
 from utils.camera_view_utils import *
 from utils.render_utils import *
 from utils.lighting_utils import *
-from utils.normal_utils import *
 
 wp.init()
 wp.config.verify_cuda = True
@@ -50,44 +49,6 @@ ti.init(arch=ti.cuda, device_memory_GB=8.0, random_seed=42)
 import sys # 导入 sys 模块以使用 sys.stdout.flush()
 
 
-# def azimith_and_elvation_array(start_azimith, azimith_max_delta, start_elevation, elevation_max_delta , stage_num):
-#     return azimith_round_array(azimith_max_delta, stage_num, start_azimith ),  elevation_round_array(elevation_max_delta, stage_num, start_elevation)
-    
-# def azimith_and_elvation_array(
-#     start_azimith,
-#     azimith_max_delta,  # 现在解释为方位角方向的半径
-#     start_elevation,
-#     elevation_max_delta, # 现在解释为俯仰角方向的半径
-#     stage_num
-# ):
-#     """
-#     生成圆形（或椭圆形）采样路径的方位角和俯仰角数组。
-#     方形采样逻辑已被替换为圆形采样。
-
-#     参数:
-#         start_azimith: 圆心的方位角。
-#         azimith_max_delta: 方位角方向的半径。
-#         start_elevation: 圆心的俯仰角。
-#         elevation_max_delta: 俯仰角方向的半径。
-#         stage_num: 用于确定圆形路径上的点数。总点数将是 4 * stage_num。
-
-#     返回:
-#         一个元组 (azimuth_array, elevation_array)。
-#     """
-#     num_total_points = 4 * stage_num
-
-#     if num_total_points <= 0:
-#         # 如果 stage_num <= 0, 返回起始点本身，避免 linspace 出错
-#         return np.array([start_azimith]), np.array([start_elevation])
-
-#     # 生成角度参数 t，从 0 到 2*pi (不包含 2*pi，以避免首尾点重复)
-#     t = np.linspace(0, 2 * np.pi, num_total_points, endpoint=False)
-
-#     # 计算圆形/椭圆形路径上的方位角和俯仰角值
-#     azimuth_values = start_azimith + azimith_max_delta * np.cos(t)
-#     elevation_values = start_elevation + elevation_max_delta * np.sin(t)
-
-#     return azimuth_values, elevation_values
 
 
 
@@ -667,7 +628,7 @@ if __name__ == "__main__":
     shs_render2 = 1.0 * gaussians2.get_features
     
     
-
+      
 
     azimith_list1 , elevation_list1 = uniform_linear_transition_az_el(start_azimith=45 , target_azimith=45, start_elevation=0, target_elevation=0, stage_num=20  )
     

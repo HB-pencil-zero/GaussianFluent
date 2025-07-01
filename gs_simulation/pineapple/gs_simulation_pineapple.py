@@ -39,8 +39,6 @@ from utils.transformation_utils import *
 from utils.camera_view_utils import *
 from utils.render_utils import *
 from utils.lighting_utils import *
-from utils.normal_utils import *
-
 import torch
 
 def filter_gaussian_points_by_xyz(tensor,
@@ -831,36 +829,6 @@ if __name__ == "__main__":
                                     --npy_path {normal_path} --output_folder {output_folder}  --opacity_path {opacity_path} --valid_indice_path {valid_indice_path}'
                         run_command_realtime(command)
 
-
-                        # _, _, point_xy2 = rasterize2(
-                        #     means3D=pos,
-                        #     means2D=init_screen_points,
-                        #     shs=None,
-                        #     colors_precomp=colors_precomp,
-                        #     opacities=opacity,
-                        #     scales=None,
-                        #     rotations=None,
-                        #     cov3D_precomp=cov3D,
-                        # )
-                        
-                        # # normal = compute_normals_pure_torch(pos)
-                        # normal  = np.load("valid_normals.npy")
-                        # normal = optimize_normals_consistency(pos.detach().cpu().numpy(), normal, k=30)
-                        # normal = torch.from_numpy(normal).cuda()
-                        # # normal = optimize_normals_consistency_pt_cuda_tensor_input(pos, normal , k=30)
-                        # light_bool_mask = calculate_occlusion_map_light_dist_angle_cuda(
-                        #     pos,
-                        #     point_xy2,
-                        #     current_camera2.camera_center
-                        # )
-                        
-                        # colors_precomp = apply_phong_lighting_to_gaussians_with_mask(
-                        #     gaussian_model = gaussians,
-                        #     viewpoint_camera = current_camera2,
-                        #     is_lit_mask = light_bool_mask,
-                        #     normals_override = normal ,
-                        #     mask=valid_mask
-                        # )
                     valid_indice = torch.from_numpy(np.load(os.path.join(output_folder, "pos_valid_indice.npy"))).to("cuda")
                     colors = torch.from_numpy(np.load(os.path.join(output_folder, "phong_colors.npy"))).to("cuda").reshape(-1 , 3).float()
 
