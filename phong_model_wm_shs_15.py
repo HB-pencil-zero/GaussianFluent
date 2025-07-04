@@ -153,6 +153,7 @@ def calculate_phong_colors_attenuated_shadowed_internal_batch(
 
     # 3. 计算衰减因子
     attenuation = attenuation_constant / distance_sq # (N, 1)
+    # attenuation = attenuation_constant / distance_to_light # (N, 1)
 
     # 4. 计算视线方向向量
     V_vec = view_pos.unsqueeze(0) - points_gpu # (N, 3)
@@ -492,6 +493,14 @@ if __name__ == "__main__":
     parser.add_argument("--valid_indice_path", type=str, required=True)
     parser.add_argument("--shs_path", type=str, required=True)
     parser.add_argument("--color_path", type=str, required=True)
+    parser.add_argument(
+        "--light_pos", 
+        type=float, 
+        nargs=3, 
+        required=True,
+        help="提供一个包含3个浮点数的光源位置，用空格隔开 (例如: --light_pos 1.0 2.5 -3.0)"
+    )
+
     args = parser.parse_args()
     output_folder = args.output_folder 
     
@@ -614,7 +623,7 @@ if __name__ == "__main__":
 
     # 定义光源
     light_source = {
-        'position': [0.0, 0.0, 0],   # 光源位置
+        'position': np.array(args.light_pos),   # 光源位置
         'ambient': [0.7, 0.7, 0.7],   # 环境光强度（调低一点，因为物体自带环境色）
         'diffuse': [0.4, 0.4, 0.4],   # 漫反射光强度
         'specular': [0.0, 0.0, 0.0]   # 镜面反射光强度
@@ -646,7 +655,7 @@ if __name__ == "__main__":
         shadow_batch_size=200,
         shadow_epsilon= 1e-3,
         alignment_threshold=0.999,
-        attenuation_constant=9,
+        attenuation_constant=20,
         opacity = opacity_tensor ,
         ignore_first_n_hits=1
     )

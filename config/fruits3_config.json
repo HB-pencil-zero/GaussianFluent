@@ -70,7 +70,7 @@
     "show_hint": false,
     "init_azimuthm": 25,
     "init_elevation": 10.0,
-    "init_radius": 12.5,
+    "init_radius": 7.5,
     "move_camera": true,
     "delta_a": 0.0,
     "delta_e": 0,

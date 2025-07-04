@@ -524,7 +524,7 @@ if __name__ == "__main__":
         print("check *.ply files to see if it's ready for simulation")
 
     biases = [0.25, 0.19, 0.18  ]  #pineple
-    frames = [60,  60, 40 ] 
+    frames = [60,  60, 260 ] 
     # biases = [ 0.12 ] 
     # frames = [100] 
     select_id = torch.tensor([], dtype=torch.int).cuda()
@@ -653,20 +653,20 @@ if __name__ == "__main__":
         combined_scene_tensors = create_combined_gaussian_scene(scene_to_create_config)
             
 
-
-        azimuth_list , elvation_list, radius_list, center_list = generate_and_append_ellipse_path(start_azimuth=385, azimuth_max_delta= 20, start_elevation=10, path_radius=7.5, path_center=np.array([3.9646,  0.9584, -0.8505]), elevation_max_delta=10, stage_num=10)
-        
+        viewpoint_center_worldspace = np.array([3.9646,  0.9584, -0.8505])
+        azimuth_list , elvation_list, radius_list, center_list = generate_and_append_ellipse_path(start_azimuth=385, azimuth_max_delta= 20, start_elevation=10, path_radius=7.5, path_center=np.array([3.9646,  0.9584, -0.8505]), elevation_max_delta=10, stage_num=15)
+        azimuth_list , elvation_list, radius_list, center_list = generate_and_append_ellipse_path(start_azimuth=385, azimuth_max_delta= 20, start_elevation=10, path_radius=7.5, path_center=np.array([3.9646,  0.9584, -0.8505]), elevation_max_delta=10, stage_num=15)
         azimuth_list , elvation_list, radius_list, center_list = linear_transition_and_append(
         start_pose=(385, 10, 7.5, (3.9646,  0.9584, -0.8505)),
         target_pose=(385, 10, 12.5, (2, 1, -1.2)),
-        stage_num=30,
+        stage_num=50,
         existing_azimuths=azimuth_list , existing_elevations=elvation_list, existing_radii=radius_list, existing_centers=center_list )
         
         
         azimuth_list , elvation_list, radius_list, center_list = linear_transition_and_append(
         start_pose=(385, 10, 12.5, (2, 1, -1.2)),
         target_pose=(470, 10, 7.5, (2.7797, -1.9686, -0.6975)),
-        stage_num=30,
+        stage_num=90,
         existing_azimuths=azimuth_list , existing_elevations=elvation_list, existing_radii=radius_list, existing_centers=center_list )
         
         pos2, cov3D2, rot2, opacity2, shs2 = load_prop_dict("gs_simulation/multiple_fruit/save_tensor/kiwi.pt")
@@ -677,7 +677,7 @@ if __name__ == "__main__":
 
             
             try :
-                start_id = 0
+                start_id = 120
                 if frame >= start_id:
                     camera_params['init_azimuthm'] = azimuth_list[frame - start_id]
                     camera_params['init_elevation'] = elvation_list[frame - start_id]
@@ -709,7 +709,7 @@ if __name__ == "__main__":
             )
             
             if not args.load_from_saved :
-                if frame > 1000:
+                if frame < 220:
                     for step in range(step_per_frame):
                         mpm_solver.p2g2p(step, substep_dt, device=device, flip_pic_ratio=material_params['flip_pic_ratio'])
 
@@ -892,134 +892,6 @@ if __name__ == "__main__":
                     255 * cv2_img,
                 )
                 if frame > end_frame:
-                    light_flag = False
-
-                    # 获取初始数据
-                    pos = mpm_solver.export_particle_x_to_torch().to(device)
-                    cov3D = mpm_solver.export_particle_cov_to_torch()
-                    rot = mpm_solver.export_particle_R_to_torch()
-                    cov3D = cov3D.view(-1, 6).to(device)
-                    rot = rot.view(-1, 3, 3).to(device)
-
-
-                    mpm_init_pos[indice] = pos
-                    mpm_init_cov[indice] = cov3D
-                    identity_matrix_3x3 = torch.eye(3, dtype=mpm_init_pos.dtype, device=mpm_init_pos.device)
-                    identity_flat_9d = identity_matrix_3x3.flatten()
-                    mpm_init_rot = identity_flat_9d.unsqueeze(0).expand(mpm_init_pos.shape[0], -1).reshape(-1, 3, 3).clone()
-                    mpm_init_rot[indice] = rot
-                    pos = mpm_init_pos
-                    cov3D = mpm_init_cov
-                    rot = mpm_init_rot
-
-                                
-                    # 应用变换
-                    pos = apply_inverse_rotations(
-                        undotransform2origin(
-                            undoshift2center111(pos), scale_origin, original_mean_pos
-                        ),
-                        rotation_matrices,
-                    )
-                    
-                    
-                    cov3D = cov3D / (scale_origin * scale_origin)
-                    cov3D = apply_inverse_cov_rotations(cov3D, rotation_matrices)
-
-
-
-
-                    # 如果有sim_area,添加未选择的点
-                    if preprocessing_params["sim_area"] is not None:
-                        pos = torch.cat([pos, unselected_pos], dim=0)
-                        cov3D = torch.cat([cov3D, unselected_cov], dim=0)
-                        opacity = torch.cat([opacity_render, unselected_opacity], dim=0)
-                        shs = torch.cat([shs_render, unselected_shs], dim=0)
-
-                    # opacity = opacity_render[select_id]
-                    # shs = shs_render[select_id]
-                    
-                    opacity = opacity_render
-                    shs = shs_render
-                    
-                    # 检测并移除含有nan的点
-                    # valid_mask = ~torch.isnan(pos).any(dim=1)
-                    # pos = pos[valid_mask]
-                    # cov3D = cov3D[valid_mask]
-                    # rot = rot[valid_mask]
-                    # opacity = opacity[valid_mask]
-                    # shs = shs[valid_mask]
-
-                    pos_ = torch.concat([pos, pos2],dim =0 )
-                    cov3D_ = torch.concat([cov3D, cov3D2],dim =0 )
-                    rot_ = torch.concat([rot, rot2],dim =0 )
-                    opacity_ = torch.concat([opacity_render, opacity_render2],dim =0 )
-                    shs_ = torch.concat([shs_render, shs_render2],dim =0 )
-
-                    pos_, cov3D_, rot_, opacity_, shs_ = load_and_concat_prop_dict("gs_simulation/multiple_fruit/save_tensor/kiwi.pt", pos_, cov3D_, rot_, opacity_, shs_, [4, 0,-1.2])
-                    colors_precomp = convert_SH(shs_, current_camera, gaussians, pos_, rot_)
-                    if color_flag:
-                        if  light_flag : 
-                            np.save("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos.npy", pos.detach().cpu().numpy())
-                            # np.save("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos.npy", pos.detach().cpu().numpy())
-                            command = 'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python normal_vector_proc_nan.py'
-                            # run_command_realtime(command)
-
-
-                            command = 'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python phong_model_wm_shs_15.py'
-
-                    
-
-                    
-                    
-                    rendering, raddi, point_xy = rasterize(
-                        means3D=pos_,
-                        means2D=init_screen_points,
-                        shs=None,
-                        colors_precomp=colors_precomp.float(),
-                        opacities=opacity_, 
-                        scales=None,
-                        rotations=None,
-                        cov3D_precomp=cov3D_,
-                    )
-                    
-                    
-                    per_frame_tensor_output_base_dir = os.path.join(args.output_path, "gaussian_frame_data")
-                    os.makedirs(per_frame_tensor_output_base_dir, exist_ok=True)
-
-                    # Create a subdirectory for the current frame's tensors
-                    current_frame_tensor_dir = os.path.join(per_frame_tensor_output_base_dir, f"frame_{frame:05d}") # e.g., frame_00000, frame_00001
-                    os.makedirs(current_frame_tensor_dir, exist_ok=True)
-
-                    # Tensors to save for the current frame.
-                    # Ensure these variables hold the correct data for the *current frame* at this point.
-                    # tensors_to_save = {
-                    #     "pos.pt": pos,
-                    #     "rot.pt": rot,  # This should be the rotation data (e.g., from gaussians.get_rotation() or the 'rot' used in convert_SH)
-                    #     "cov3D.pt": cov3D, # This should be the covariance data (e.g., from gaussians.get_covariance() or the 'cov3D' used in rasterize)
-                    #     "shs.pt": shs,  # This should be the SH coefficients (e.g., from gaussians.get_features() or the 'shs' used in convert_SH)
-                    #     "opacity.pt": opacity # This should be the opacity data (e.g., from gaussians.get_opacity() or the 'opacity' used in rasterize)
-                    # }
-
-                    # for filename, tensor_data in tensors_to_save.items():
-                    #     if tensor_data is not None:
-                    #         save_path = os.path.join(current_frame_tensor_dir, filename)
-                    #         # Detach from computation graph and move to CPU before saving (good practice)
-                    #         torch.save(tensor_data.detach().cpu(), save_path)
-                    #     else:
-                    #         print(f"Warning: Tensor for {filename} in frame {frame} is None. Skipping save.")    
-                            
-                    
-                    cv2_img = rendering.permute(1, 2, 0).detach().cpu().numpy()
-                    cv2_img = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
-                    if height is None or width is None:
-                        height = cv2_img.shape[0] // 2 * 2
-                        width = cv2_img.shape[1] // 2 * 2
-                    assert args.output_path is not None
-                    cv2.imwrite(
-                        os.path.join(args.output_path, f"{frame}.png".rjust(8, "0")),
-                        255 * cv2_img,
-                    )
-                    if frame > end_frame:
                         light_flag = False
     if args.render_img and args.compile_video:
         fps = int(1.0 / time_params["frame_dt"] /1.2 )

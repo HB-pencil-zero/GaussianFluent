@@ -524,7 +524,7 @@ if __name__ == "__main__":
         print("check *.ply files to see if it's ready for simulation")
 
     biases = [0.25, 0.19, 0.18  ]  #pineple
-    frames = [60,  60, 280 ] 
+    frames = [60,  60, 100 ] 
     # biases = [ 0.12 ] 
     # frames = [100] 
     select_id = torch.tensor([], dtype=torch.int).cuda()
@@ -655,7 +655,7 @@ if __name__ == "__main__":
         transform_matrix = torch.from_numpy(np.loadtxt("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden/transform_matrix.txt")).to(device).float()
         pos2 = gaussians2._xyz.detach()
         pos2 = (pos2  @ transform_matrix[:3, :3].T  + transform_matrix[:3, 3])*3
-        pos2[:, 2] -= 2.0
+        pos2[:, 2] -= 1.5
         pos2[:, 0] -= 2.0
         pos2[:, 1] -= 2.0
         cov3D2 = (rotate_flat_covariance(gaussians2.get_covariance(), transform_matrix[:3, :3])*3**2)

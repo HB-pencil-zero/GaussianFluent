@@ -691,7 +691,7 @@ if __name__ == "__main__":
         transform_matrix = torch.from_numpy(np.loadtxt("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden/transform_matrix.txt")).to(device).float()
         pos2 = gaussians2._xyz.detach()
         pos2 = (pos2  @ transform_matrix[:3, :3].T  + transform_matrix[:3, 3])*3
-        pos2[:, 2] -= 2.1
+        pos2[:, 2] -= 1.5
         pos2[:, 0] -= 2.3
         pos2[:, 1] -= 2.0
         cov3D2 = (rotate_flat_covariance(gaussians2.get_covariance(), transform_matrix[:3, :3])*3**2)

@@ -767,3 +767,191 @@ def create_combined_gaussian_scene(
     }
     
     return final_scene
+
+
+torch.backends.cuda.preferred_linalg_library("magma") 
+import torch
+
+
+
+
+
+def strip_lowerdiag(L):
+    uncertainty = torch.zeros((L.shape[0], 6), dtype=torch.float, device="cuda")
+
+    uncertainty[:, 0] = L[:, 0, 0]
+    uncertainty[:, 1] = L[:, 0, 1]
+    uncertainty[:, 2] = L[:, 0, 2]
+    uncertainty[:, 3] = L[:, 1, 1]
+    uncertainty[:, 4] = L[:, 1, 2]
+    uncertainty[:, 5] = L[:, 2, 2]
+    return uncertainty
+
+def strip_symmetric(sym):
+    return strip_lowerdiag(sym)
+
+def build_rotation(r):
+    norm = torch.sqrt(r[:,0]*r[:,0] + r[:,1]*r[:,1] + r[:,2]*r[:,2] + r[:,3]*r[:,3])
+
+    q = r / norm[:, None]
+
+    R = torch.zeros((q.size(0), 3, 3), device='cuda')
+
+    r = q[:, 0]
+    x = q[:, 1]
+    y = q[:, 2]
+    z = q[:, 3]
+
+    R[:, 0, 0] = 1 - 2 * (y*y + z*z)
+    R[:, 0, 1] = 2 * (x*y - r*z)
+    R[:, 0, 2] = 2 * (x*z + r*y)
+    R[:, 1, 0] = 2 * (x*y + r*z)
+    R[:, 1, 1] = 1 - 2 * (x*x + z*z)
+    R[:, 1, 2] = 2 * (y*z - r*x)
+    R[:, 2, 0] = 2 * (x*z - r*y)
+    R[:, 2, 1] = 2 * (y*z + r*x)
+    R[:, 2, 2] = 1 - 2 * (x*x + y*y)
+    return R
+
+def build_scaling_rotation(s, r):
+    L = torch.zeros((s.shape[0], 3, 3), dtype=torch.float, device="cuda")
+    R = build_rotation(r)
+
+    L[:,0,0] = s[:,0]
+    L[:,1,1] = s[:,1]
+    L[:,2,2] = s[:,2]
+
+    L = R @ L
+    return L
+
+
+
+def build_covariance_from_scaling_rotation(scaling, scaling_modifier, rotation):
+    L = build_scaling_rotation(scaling_modifier * scaling, rotation)
+    actual_covariance = L @ L.transpose(1, 2)
+    symm = strip_symmetric(actual_covariance)
+    return symm
+
+
+def matrix_to_quaternion(R):
+    """
+    将一批旋转矩阵 (N, 3, 3) 转换为四元数 (N, 4)。
+    四元数格式为 (w, x, y, z)。
+    """
+    # 获取矩阵的对角线元素
+    diag = torch.diagonal(R, offset=0, dim1=-2, dim2=-1)
+    # 计算迹 (trace)
+    trace = diag.sum(-1)
+
+    # 根据不同的情况计算四元数，以保证数值稳定性
+    # 参考: https://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/
+    
+    # Case 1: trace > 0
+    s = torch.sqrt(trace + 1.0) * 2
+    qw = 0.25 * s
+    qx = (R[:, 2, 1] - R[:, 1, 2]) / s
+    qy = (R[:, 0, 2] - R[:, 2, 0]) / s
+    qz = (R[:, 1, 0] - R[:, 0, 1]) / s
+    
+    # 将所有情况的结果存储在张量中
+    q = torch.stack([qw, qx, qy, qz], dim=-1)
+
+    # Case 2, 3, 4: trace <= 0
+    # 找到对角线元素最大的索引
+    max_diag_idx = torch.argmax(diag, dim=-1)
+    
+    # 当 R[0,0] 是最大对角元素时
+    is_case2 = (max_diag_idx == 0) & (trace <= 0)
+    if torch.any(is_case2):
+        s = torch.sqrt(1.0 + R[is_case2, 0, 0] - R[is_case2, 1, 1] - R[is_case2, 2, 2]) * 2
+        q[is_case2, 0] = (R[is_case2, 2, 1] - R[is_case2, 1, 2]) / s
+        q[is_case2, 1] = 0.25 * s
+        q[is_case2, 2] = (R[is_case2, 0, 1] + R[is_case2, 1, 0]) / s
+        q[is_case2, 3] = (R[is_case2, 0, 2] + R[is_case2, 2, 0]) / s
+
+    # 当 R[1,1] 是最大对角元素时
+    is_case3 = (max_diag_idx == 1) & (trace <= 0)
+    if torch.any(is_case3):
+        s = torch.sqrt(1.0 + R[is_case3, 1, 1] - R[is_case3, 0, 0] - R[is_case3, 2, 2]) * 2
+        q[is_case3, 0] = (R[is_case3, 0, 2] - R[is_case3, 2, 0]) / s
+        q[is_case3, 1] = (R[is_case3, 0, 1] + R[is_case3, 1, 0]) / s
+        q[is_case3, 2] = 0.25 * s
+        q[is_case3, 3] = (R[is_case3, 1, 2] + R[is_case3, 2, 1]) / s
+        
+    # 当 R[2,2] 是最大对角元素时
+    is_case4 = (max_diag_idx == 2) & (trace <= 0)
+    if torch.any(is_case4):
+        s = torch.sqrt(1.0 + R[is_case4, 2, 2] - R[is_case4, 0, 0] - R[is_case4, 1, 1]) * 2
+        q[is_case4, 0] = (R[is_case4, 1, 0] - R[is_case4, 0, 1]) / s
+        q[is_case4, 1] = (R[is_case4, 0, 2] + R[is_case4, 2, 0]) / s
+        q[is_case4, 2] = (R[is_case4, 1, 2] + R[is_case4, 2, 1]) / s
+        q[is_case4, 3] = 0.25 * s
+        
+    return q
+
+
+def build_symmetric_from_strip(strip):
+    """
+    从一个长度为6的向量重建一个3x3的对称矩阵。
+    这是 strip_symmetric 的逆操作。
+    """
+    N = strip.shape[0]
+    # 初始化一个零矩阵
+    symm = torch.zeros((N, 3, 3), dtype=strip.dtype, device=strip.device)
+    
+    # 填充下三角和对角线
+    symm[:, 0, 0] = strip[:, 0]
+    symm[:, 1, 0] = strip[:, 1]
+    symm[:, 1, 1] = strip[:, 3]
+    symm[:, 2, 0] = strip[:, 2]
+    symm[:, 2, 1] = strip[:, 4]
+    symm[:, 2, 2] = strip[:, 5]
+    
+    # 利用对称性填充上三角
+    symm[:, 0, 1] = strip[:, 1]
+    symm[:, 0, 2] = strip[:, 2]
+    symm[:, 1, 2] = strip[:, 4]
+    
+    return symm
+
+
+def extract_scaling_rotation_from_symm(symm):
+    """
+    将一个由6个浮点数表示的协方差矩阵分解回 scaling 和 rotation。
+    这是 build_covariance_from_scaling_rotation 的逆操作。
+
+    参数:
+    - symm (torch.Tensor): 形状为 (N, 6) 的张量，表示N个协方差矩阵的下三角和对角线元素。
+
+    返回:
+    - scaling (torch.Tensor): 形状为 (N, 3) 的缩放因子。
+    - rotation (torch.Tensor): 形状为 (N, 4) 的旋转四元数 (w, x, y, z)。
+    """
+    # 步骤 1: 从 symm 重建协方差矩阵 C
+    covariance = build_symmetric_from_strip(symm)
+
+    # 步骤 2: 对协方差矩阵 C 进行特征值分解
+    # torch.linalg.eigh 专门用于对称/厄米矩阵，返回的特征值是实数且按升序排列。
+    # eigenvalues: (N, 3), eigenvectors: (N, 3, 3)
+    eigenvalues, eigenvectors = torch.linalg.eigh(covariance)
+
+    # 步骤 3: 提取 Scaling
+    # 特征值可能因为数值误差略小于0，用 clamp 修正
+    scaling = torch.sqrt(torch.clamp(eigenvalues, min=0.0))
+
+    # 步骤 4: 提取旋转矩阵 R 并确保其为纯旋转
+    R = eigenvectors
+    # 特征分解可能产生一个行列式为-1的矩阵（反射），我们需要修正它
+    # 通过翻转行列式为负的矩阵的其中一个特征向量（列）的符号来修正
+    determinants = torch.linalg.det(R)
+    # 找到行列式为负的矩阵
+    fix_mask = determinants < 0
+    if torch.any(fix_mask):
+        # 翻转最后一个特征向量（第三列）的符号
+        R[fix_mask, :, 2] = -R[fix_mask, :, 2]
+
+    # 步骤 5: 将旋转矩阵 R 转换为四元数
+    # 注意：原始代码的四元数格式是 (r, x, y, z)，其中 r 是实部 (w)
+    rotation = matrix_to_quaternion(R)
+
+    return scaling, rotation

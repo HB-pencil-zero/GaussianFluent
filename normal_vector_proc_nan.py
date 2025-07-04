@@ -302,10 +302,6 @@ def example_from_file(  output_folder, points_npy_path, ply_file_path=None ):
             np.save(output_indices, valid_indices)
 
 
-            print(f"输出将保存在目录: {output_directory}")
-            print(f"  - 有效点云PLY: {os.path.basename(output_file_ply)}")
-            print(f"  - 单视图PNG: {os.path.basename(output_file_png)}")
-            print(f"  - 多视图目录: {os.path.basename(output_dir_views)}")
 
             # 保存带法向量的【有效】点云
             # 注意：确保你的 save_point_cloud_with_normals 函数存在且可用

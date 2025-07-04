@@ -655,21 +655,21 @@ if __name__ == "__main__":
         
         combined_scene_tensors = create_combined_gaussian_scene(scene_to_create_config)
             
-            
+        viewpoint_center_worldspace  = np.array([1.2150,  3.4929, -0.6749])
 
-        azimuth_list , elvation_list, radius_list, center_list = generate_and_append_ellipse_path(start_azimuth=350, azimuth_max_delta= 20, start_elevation=10, path_radius=7.5, path_center=np.array([1.2150,  3.4929, -0.6749]), elevation_max_delta=10, stage_num=10)
+        azimuth_list , elvation_list, radius_list, center_list = generate_and_append_ellipse_path(start_azimuth=350, azimuth_max_delta= 20, start_elevation=10, path_radius=7.5, path_center=np.array([1.2150,  3.4929, -0.6749]), elevation_max_delta=10, stage_num=15)
         
         azimuth_list , elvation_list, radius_list, center_list = linear_transition_and_append(
         start_pose=(350, 10, 7.5, (1.2150,  3.4929, -0.6749)),
         target_pose=(350, 10, 12.5, (2, 1, -1.2)),
-        stage_num=30,
+        stage_num=50,
         existing_azimuths=azimuth_list , existing_elevations=elvation_list, existing_radii=radius_list, existing_centers=center_list )
         
 
         azimuth_list , elvation_list, radius_list, center_list = linear_transition_and_append(
             start_pose=(350, 10, 12.5, (2, 1, -1.2)),
             target_pose=(385, 10, 7.5, (3.9646,  0.9584, -0.8505)),
-            stage_num=30,
+            stage_num=40,
             existing_azimuths=azimuth_list , existing_elevations=elvation_list, existing_radii=radius_list, existing_centers=center_list )
 
         pos2, cov3D2, rot2, opacity2, shs2 = load_prop_dict("gs_simulation/multiple_fruit/save_tensor/watermelon.pt")
@@ -681,7 +681,7 @@ if __name__ == "__main__":
             
             
             try :
-                start_id = 0
+                start_id = 250
                 if frame >= start_id:
                     camera_params['init_azimuthm'] = azimuth_list[frame - start_id]
                     camera_params['init_elevation'] = elvation_list[frame - start_id]
@@ -715,7 +715,7 @@ if __name__ == "__main__":
             
             if not args.load_from_saved :
                 # pass
-                if frame >  1950:
+                if frame < 250:
                     for step in range(step_per_frame):
                         mpm_solver.p2g2p(step, substep_dt, device=device, flip_pic_ratio=material_params['flip_pic_ratio'])
 

@@ -40,7 +40,6 @@ from utils.transformation_utils import *
 from utils.camera_view_utils import *
 from utils.render_utils import *
 from utils.lighting_utils import *
-from utils.normal_utils import *
 
 import torch
 
@@ -527,7 +526,7 @@ if __name__ == "__main__":
         print("check *.ply files to see if it's ready for simulation")
 
     biases = [0.25, 0.20, 0.14, 0.10 ]  #pineple
-    frames = [50,  50, 50, 250] 
+    frames = [50,  50, 50, 150] 
     # biases = [ 0.12 ] 
     # frames = [100] 
     select_id = torch.tensor([], dtype=torch.int).cuda()
@@ -654,7 +653,7 @@ if __name__ == "__main__":
         transform_matrix = torch.from_numpy(np.loadtxt("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden/transform_matrix.txt")).to(device).float()
         pos2 = gaussians2._xyz.detach()
         pos2 = (pos2  @ transform_matrix[:3, :3].T  + transform_matrix[:3, 3])*3
-        pos2[:, 2] -= 2.1
+        pos2[:, 2] -= 1.5
         pos2[:, 0] -= 2.3
         pos2[:, 1] -= 2.0
         cov3D2 = (rotate_flat_covariance(gaussians2.get_covariance(), transform_matrix[:3, :3])*3**2)
@@ -829,7 +828,7 @@ if __name__ == "__main__":
                 
                     
                 pos_ = torch.concat([pos, pos2],dim =0 )
-                cov3D_ = torch.concat([cov3D, cov3D2],dim =0 )
+                cov3D_ = torch.concat([cov3D, cov3D2],dim =0 ) 
                 rot_ = torch.concat([rot, rot2],dim =0 )
                 opacity_ = torch.concat([opacity , opacity_render2],dim =0 )
                 shs_ = torch.concat([shs, shs_render2],dim =0 )
@@ -851,7 +850,7 @@ if __name__ == "__main__":
                     opacities=opacity_, 
                     scales=None,
                     rotations=None,
-                    cov3D_precomp=cov3D_,
+                    cov3D_precomp=cov3D_ ,
                 )
                 
 

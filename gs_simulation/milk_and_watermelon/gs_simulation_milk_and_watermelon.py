@@ -40,7 +40,6 @@ from utils.transformation_utils import *
 from utils.camera_view_utils import *
 from utils.render_utils import *
 from utils.lighting_utils import *
-from utils.normal_utils import *
 
 wp.init()
 wp.config.verify_cuda = True
@@ -697,11 +696,26 @@ if __name__ == "__main__":
     # opacity_render2 = gaussians2.get_opacity
     # shs_render2 = 1 * gaussians2.get_features
 
-
-
+    azimuth_list , elvation_list, radius_list, center_list = generate_and_append_ellipse_path(start_azimuth=265, azimuth_max_delta= 20, start_elevation=10, path_radius=7.5, path_center=viewpoint_center_worldspace, elevation_max_delta=10, stage_num=15)
+    azimuth_list , elvation_list, radius_list, center_list = generate_and_append_ellipse_path(start_azimuth=265, azimuth_max_delta= 20, start_elevation=10, path_radius=7.5, path_center=viewpoint_center_worldspace, elevation_max_delta=10, stage_num=15)
     gaussians_watermenlon = load_checkpoint("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/watermelon")
     mask = loaded_data['mask']
     for frame in tqdm(range(frame_num)):
+        
+
+        try :
+            start_id = 80
+            if frame >= start_id:
+                camera_params['init_azimuthm'] = azimuth_list[frame - start_id]
+                camera_params['init_elevation'] = elvation_list[frame - start_id]
+                camera_params['init_radius'] = radius_list[frame - start_id]
+                viewpoint_center_worldspace = center_list[frame - start_id]
+        except Exception as e:
+            camera_params['init_azimuthm'] = azimuth_list[-1]
+            camera_params['init_elevation'] = elvation_list[-1]
+            camera_params['init_radius'] = radius_list[-1]
+            viewpoint_center_worldspace = center_list[-1]     
+        
         current_camera = get_camera_view(
             model_path,
             default_camera_index=-1,

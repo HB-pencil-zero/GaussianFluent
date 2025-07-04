@@ -619,7 +619,7 @@ if __name__ == "__main__":
     transform_matrix = torch.from_numpy(np.loadtxt("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden/transform_matrix.txt")).to(device).float()
     pos2 = gaussians2._xyz.detach()
     pos2 = (pos2  @ transform_matrix[:3, :3].T  + transform_matrix[:3, 3])*3
-    pos2[:, 2] -= 0.28
+    pos2[:, 2] -= 0.38
     pos2[:, 0] -= 2.0
     pos2[:, 1] += 1.0 + 3.0 
     cov3D2 = (rotate_flat_covariance(gaussians2.get_covariance(), transform_matrix[:3, :3])*3**2)
@@ -838,14 +838,24 @@ if __name__ == "__main__":
             opacity_ = torch.concat([opacity , opacity_render2],dim =0 )
             shs_ = torch.concat([ scales.view(-1,1,1)  * shs, shs_render2],dim =0 )
             
-            
+            # if frame == 0 :
+            #     scale__ , quat__ = extract_scaling_rotation_from_symm(cov3D_)
+
             colors_precomp = convert_SH(shs_, current_camera, gaussians, pos_, rot_)
             if color_flag:
                 colors_precomp[ valid_indice ]  = colors.clone()
 
-
-        
-            
+            # gausssians3 = load_checkpoint("model/bullet_0_psnr36") 
+            # index = pos.shape[0]
+            # gaussians._xyz = pos_[:index]
+            # gaussians._opacity = opacity_[:index]
+            # gaussians._features_rest = shs_[:, 1:][:index]
+            # gaussians._features_dc = shs_[:, :1][:index]
+            # gaussians._scaling = scale__[:index]
+            # gaussians._rotation = quat__[:index]
+            # gaussians.save_ply("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/jelly/point_cloud/iteration_5000/point_cloud.ply")
+            # gaussians._scaling = torch.concat([gaussians._scaling, gaussians3._scaling * (1/3), gaussians2._scaling])
+            # gaussians._rotation = torch.concat([gaussians._rotation, gaussians3._rotation , gaussians2._rotation])
             
             rendering, raddi, point_xy = rasterize(
                 means3D=pos_,
