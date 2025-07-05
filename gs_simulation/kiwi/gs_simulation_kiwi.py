@@ -385,7 +385,7 @@ if __name__ == "__main__":
         if args.white_bg
         else torch.tensor([0, 0, 0], dtype=torch.float32, device="cuda")
     )
-    background = torch.tensor([0, 0, 0], dtype=torch.float32, device="cuda")
+    # background = torch.tensor([0, 0, 0], dtype=torch.float32, device="cuda")
 
     # init the scene
     print("Initializing scene and pre-processing...")
@@ -819,19 +819,19 @@ if __name__ == "__main__":
                     colors = torch.from_numpy(np.load(os.path.join(output_folder, "phong_colors.npy"))).to("cuda").reshape(-1 , 3).float()
 
                 
-                # pos_ = pos
-                # cov3D_ = cov3D
-                # rot_ = rot
-                # opacity_ =  opacity
-                # shs_ = shs
+                pos_ = pos
+                cov3D_ = cov3D
+                rot_ = rot
+                opacity_ =  opacity
+                shs_ = shs
                 
                 
                     
-                pos_ = torch.concat([pos, pos2],dim =0 )
-                cov3D_ = torch.concat([cov3D, cov3D2],dim =0 ) 
-                rot_ = torch.concat([rot, rot2],dim =0 )
-                opacity_ = torch.concat([opacity , opacity_render2],dim =0 )
-                shs_ = torch.concat([shs, shs_render2],dim =0 )
+                # pos_ = torch.concat([pos, pos2],dim =0 )
+                # cov3D_ = torch.concat([cov3D, cov3D2],dim =0 ) 
+                # rot_ = torch.concat([rot, rot2],dim =0 )
+                # opacity_ = torch.concat([opacity , opacity_render2],dim =0 )
+                # shs_ = torch.concat([shs, shs_render2],dim =0 )
                 
                 
                 colors_precomp = convert_SH(shs_, current_camera, gaussians, pos_, rot_)

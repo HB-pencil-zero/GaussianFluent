@@ -666,14 +666,15 @@ if __name__ == "__main__":
             center_view_world_space=viewpoint_center_worldspace,
             observant_coordinates=observant_coordinates,
             show_hint=camera_params["show_hint"],
-            init_azimuthm=azimith_list[frame],
-            init_elevation=elevation_list[frame],
+            init_azimuthm= azimith_list[0],#azimith_list[frame],
+            init_elevation= elevation_list[0],#elevation_list[frame],
             init_radius=camera_params["init_radius"],
             move_camera=camera_params["move_camera"],
             current_frame=frame,
             delta_a=camera_params["delta_a"],
             delta_e=camera_params["delta_e"],
             delta_r=camera_params["delta_r"],
+            scales=1
         )
         rasterize = initialize_resterize(
             current_camera, gaussians, pipeline, background

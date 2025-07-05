@@ -40,7 +40,7 @@ from utils.transformation_utils import *
 from utils.camera_view_utils import *
 from utils.render_utils import *
 from utils.lighting_utils import *
-from utils.normal_utils import *
+
 
 wp.init()
 wp.config.verify_cuda = True
@@ -421,11 +421,11 @@ if __name__ == "__main__":
     width = None
     ti.reset()
     # torch.cuda.empty_cache()
-    color_flag = False
+    color_flag = True
     # color_flag = True
     
     load_color = True
-    light_flag = True
+    light_flag = False
     end_frame = 23000000
     delta = 0 
 

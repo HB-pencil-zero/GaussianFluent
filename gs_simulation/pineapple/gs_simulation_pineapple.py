@@ -633,7 +633,7 @@ if __name__ == "__main__":
         width = None
         ti.reset()
         # torch.cuda.empty_cache()
-        color_flag = False
+        color_flag = True
         # color_flag = True
         light_flag = True
         end_frame = 1000
@@ -663,12 +663,16 @@ if __name__ == "__main__":
         opacity_render2 = gaussians2.get_opacity
         shs_render2 = 1.0 * gaussians2.get_features
         
-            
+        light_list = [0, 3, 25, 65, 85]
         for frame in tqdm(range(frame_num)):
             # frame = frame
             frame = frame + frame_sum  
             # if frame > 99 :
             #     frame = 99
+            if frame in light_list:
+                color_flag = True
+            else:
+                color_flag = False
             current_camera = get_camera_view(
                 model_path,
                 default_camera_index=camera_params["default_camera_index"],
@@ -815,22 +819,51 @@ if __name__ == "__main__":
                 os.makedirs(current_frame_light_dir, exist_ok=True)
                 
                 if color_flag:
-                    if  light_flag : 
+                        pos = torch.concat([pos, pos2],dim =0 )
+                        cov3D = torch.concat([cov3D, cov3D2],dim =0 )
+                        rot = torch.concat([rot, rot2],dim =0 )
+                        opacity = torch.concat([opacity , opacity_render2],dim =0 )
+                        shs = torch.concat([shs, shs_render2],dim =0 )
+                        
                         npy_path = os.path.join(current_frame_tensor_dir, 'pos.pt')
                         opacity_path = os.path.join(current_frame_tensor_dir, 'opacity.pt')
-                        output_folder = current_frame_light_dir
-                        # np.save("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos.npy", pos.detach().cpu().numpy())
-                        command = f'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python normal_vector_proc_nan.py --npy_path {npy_path} --output_folder {output_folder}'
-                        # run_command_realtime(command)
+                        shs_path = os.path.join(current_frame_tensor_dir, 'shs.pt')
+                        cov_path = os.path.join(current_frame_tensor_dir, 'cov3D.pt')
+                        rot_path = os.path.join(current_frame_tensor_dir, 'rot.pt')
+                        
+                        colors_precomp = convert_SH(shs, current_camera, gaussians, pos, rot)
+                        color_path = os.path.join(current_frame_tensor_dir, 'color.pt')
+                        
+                        torch.save(pos.detach().cpu(), npy_path)
+                        torch.save(opacity.detach().cpu(), opacity_path)
+                        torch.save(shs.detach().cpu(), shs_path)
+                        torch.save(colors_precomp.detach().cpu(), color_path)
+                        torch.save(cov3D.detach().cpu(), cov_path)
+                        torch.save(rot.detach().cpu(), rot_path)
 
+                        output_folder = current_frame_light_dir
                         normal_path = os.path.join(output_folder, 'pos_valid_with_normals.ply')
                         valid_indice_path = os.path.join(output_folder, "pos_valid_indice.npy")
-                        command = f'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python phong_model_wm_shs_15.py \
-                                    --npy_path {normal_path} --output_folder {output_folder}  --opacity_path {opacity_path} --valid_indice_path {valid_indice_path}'
-                        run_command_realtime(command)
+                        if  light_flag : 
 
-                    valid_indice = torch.from_numpy(np.load(os.path.join(output_folder, "pos_valid_indice.npy"))).to("cuda")
-                    colors = torch.from_numpy(np.load(os.path.join(output_folder, "phong_colors.npy"))).to("cuda").reshape(-1 , 3).float()
+                            command = f'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python normal_vector_proc_nan.py --npy_path {npy_path} --output_folder {output_folder}'
+                            run_command_realtime(command)
+
+                            light_pos =  "1 1.5 0.5"
+                            
+                            command = f'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python phong_model_wm_shs_15.py \
+                                        --npy_path {normal_path} --output_folder {output_folder}  --opacity_path {opacity_path} \
+                                            --valid_indice_path {valid_indice_path} --shs_path {shs_path} --color_path {color_path} --light_pos {light_pos}'
+                            run_command_realtime(command)
+                            
+                            
+
+                        # pcd_combined = o3d.io.read_point_cloud(normal_path)
+                        # normal = torch.from_numpy(np.array(pcd_combined.normals)).to("cuda")
+                        valid_indice = torch.from_numpy(np.load(os.path.join(output_folder, "pos_valid_indice.npy"))).to("cuda")
+                        colors = torch.from_numpy(np.load(os.path.join(output_folder, "phong_colors.npy"))).to("cuda").reshape(-1 , 3).float()
+
+   
 
                 
                 # pos_ = pos
@@ -840,6 +873,7 @@ if __name__ == "__main__":
                 # shs_ = shs
                 
                 
+                # pos[:,1] += 1
                     
                 pos_ = torch.concat([pos, pos2],dim =0 )
                 cov3D_ = torch.concat([cov3D, cov3D2],dim =0 )

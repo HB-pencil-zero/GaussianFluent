@@ -497,9 +497,16 @@ if __name__ == "__main__":
         "--light_pos", 
         type=float, 
         nargs=3, 
-        required=True,
-        help="提供一个包含3个浮点数的光源位置，用空格隔开 (例如: --light_pos 1.0 2.5 -3.0)"
+        # 关键点 1: 必须移除 required=True
+        # required=True, 
+        
+        # 关键点 2: 设置默认值为一个包含3个浮点数的列表
+        default=[0.0, 0.0, 0.0],
+        
+        # 最佳实践: 在help信息中用 %(default)s 来自动显示默认值
+        help="提供光源位置 (x y z)，用空格隔开。 默认为: %(default)s"
     )
+
 
     args = parser.parse_args()
     output_folder = args.output_folder 
@@ -655,7 +662,7 @@ if __name__ == "__main__":
         shadow_batch_size=200,
         shadow_epsilon= 1e-3,
         alignment_threshold=0.999,
-        attenuation_constant=20,
+        attenuation_constant=5, #20,
         opacity = opacity_tensor ,
         ignore_first_n_hits=1
     )

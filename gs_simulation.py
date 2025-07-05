@@ -39,7 +39,7 @@ from utils.transformation_utils import *
 from utils.camera_view_utils import *
 from utils.render_utils import *
 from utils.lighting_utils import *
-from utils.normal_utils import *
+
 
 wp.init()
 wp.config.verify_cuda = True
@@ -481,7 +481,7 @@ if __name__ == "__main__":
                 save_to_h5=args.output_h5,
             )
             
-        gaussians2 = load_checkpoint("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden")
+        gaussians2 = load_checkpoint("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden_ours")
         pos2 =  gaussians2._xyz.detach() 
         pos2[:, 2] -= 2.2
         cov3D2 = gaussians2.get_covariance() 
