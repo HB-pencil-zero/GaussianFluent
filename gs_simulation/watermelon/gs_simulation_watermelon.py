@@ -421,11 +421,12 @@ if __name__ == "__main__":
     width = None
     ti.reset()
     # torch.cuda.empty_cache()
-    color_flag = False
+
     # color_flag = True
     
     load_color = True
-    light_flag = False
+    color_flag = True
+    light_flag = True
     end_frame = 23000000
     delta = 0 
 
@@ -579,13 +580,13 @@ if __name__ == "__main__":
             current_frame_light_dir = os.path.join(light_output_base_dir, f"frame_{frame-delta:05d}") # e.g., frame_00000, frame_00001
             os.makedirs(current_frame_light_dir, exist_ok=True)
             
-            if frame >= 5 :
-                opacity[:gaussians._xyz.shape[0]][opa_mask] = 0
+            # if frame >= 5 :
+            #     opacity[:gaussians._xyz.shape[0]][opa_mask] = 0
             
             if color_flag:
                 pos = torch.concat([pos, pos2],dim =0 )
-                cov3D = torch.concat([cov3D, cov3D2],dim =0 )
-                rot = torch.concat([rot, rot2],dim =0 )
+                cov3D = torch.concat([cov3D, cov3D2],dim=0 )
+                rot = torch.concat([rot, rot2], dim=0 )
                 opacity = torch.concat([opacity , opacity_render2],dim =0 )
                 shs = torch.concat([shs, shs_render2],dim =0 )
                 
@@ -608,14 +609,17 @@ if __name__ == "__main__":
                 output_folder = current_frame_light_dir
                 normal_path = os.path.join(output_folder, 'pos_valid_with_normals.ply')
                 valid_indice_path = os.path.join(output_folder, "pos_valid_indice.npy")
+                attenuation_constant = 3
                 if  light_flag : 
 
-                    command = f'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python normal_vector_proc_nan.py --npy_path {npy_path} --output_folder {output_folder}'
+
+                    command = f'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source /root/miniconda3/etc/profile.d/conda.sh && conda activate PhysGaussian && python normal_vector_proc_nan.py --npy_path {npy_path} --output_folder {output_folder}'
                     run_command_realtime(command)
 
 
-                    command = f'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python phong_model_wm_shs_15.py \
-                                --npy_path {normal_path} --output_folder {output_folder}  --opacity_path {opacity_path} --valid_indice_path {valid_indice_path} --shs_path {shs_path} --color_path {color_path}'
+                    command = f'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source /root/miniconda3/etc/profile.d/conda.sh && conda activate PhysGaussian && python phong_model_wm_shs_15.py \
+                                --npy_path {normal_path} --output_folder {output_folder}  --opacity_path {opacity_path} --valid_indice_path {valid_indice_path} \
+                                    --shs_path {shs_path} --color_path {color_path} --attenuation_constant {attenuation_constant}'
                     run_command_realtime(command)
                     
                     

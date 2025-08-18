@@ -663,7 +663,7 @@ if __name__ == "__main__":
         opacity_render2 = gaussians2.get_opacity
         shs_render2 = 1.0 * gaussians2.get_features
         
-        light_list = [0, 3, 25, 65, 85]
+        light_list = []
         for frame in tqdm(range(frame_num)):
             # frame = frame
             frame = frame + frame_sum  

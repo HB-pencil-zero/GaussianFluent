@@ -152,8 +152,8 @@ def calculate_phong_colors_attenuated_shadowed_internal_batch(
     L = normalize_batch(L_vec) # (N, 3)
 
     # 3. 计算衰减因子
-    attenuation = attenuation_constant / distance_sq # (N, 1)
-    # attenuation = attenuation_constant / distance_to_light # (N, 1)
+    # attenuation = attenuation_constant / distance_sq # (N, 1)
+    attenuation = attenuation_constant / distance_to_light # (N, 1)
 
     # 4. 计算视线方向向量
     V_vec = view_pos.unsqueeze(0) - points_gpu # (N, 3)
@@ -493,6 +493,7 @@ if __name__ == "__main__":
     parser.add_argument("--valid_indice_path", type=str, required=True)
     parser.add_argument("--shs_path", type=str, required=True)
     parser.add_argument("--color_path", type=str, required=True)
+    parser.add_argument("--attenuation_constant", type=float, default=7.0)
     parser.add_argument(
         "--light_pos", 
         type=float, 
@@ -501,7 +502,7 @@ if __name__ == "__main__":
         # required=True, 
         
         # 关键点 2: 设置默认值为一个包含3个浮点数的列表
-        default=[0.0, 0.0, 0.0],
+        default=[0.0, 0.0, -0.5],
         
         # 最佳实践: 在help信息中用 %(default)s 来自动显示默认值
         help="提供光源位置 (x y z)，用空格隔开。 默认为: %(default)s"
@@ -631,8 +632,8 @@ if __name__ == "__main__":
     # 定义光源
     light_source = {
         'position': np.array(args.light_pos),   # 光源位置
-        'ambient': [0.7, 0.7, 0.7],   # 环境光强度（调低一点，因为物体自带环境色）
-        'diffuse': [0.4, 0.4, 0.4],   # 漫反射光强度
+        'ambient': [0.9, 0.9, 0.9],   # 环境光强度（调低一点，因为物体自带环境色）[0.7, 0.7, 0.7]
+        'diffuse': [0.15, 0.15, 0.15],   # 漫反射光强度[0.4, 0.4, 0.4]
         'specular': [0.0, 0.0, 0.0]   # 镜面反射光强度
     }
 
@@ -662,7 +663,7 @@ if __name__ == "__main__":
         shadow_batch_size=200,
         shadow_epsilon= 1e-3,
         alignment_threshold=0.999,
-        attenuation_constant=5, #20,
+        attenuation_constant=args.attenuation_constant, #20,
         opacity = opacity_tensor ,
         ignore_first_n_hits=1
     )
