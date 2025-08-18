@@ -40,7 +40,7 @@ from utils.transformation_utils import *
 from utils.camera_view_utils import *
 from utils.render_utils import *
 from utils.lighting_utils import *
-from utils.normal_utils import *
+
 
 wp.init()
 wp.config.verify_cuda = True
@@ -720,7 +720,7 @@ if __name__ == "__main__":
             if frame > end_frame:
                 light_flag = False
     if args.render_img and args.compile_video:
-        fps = 32
+        fps = int(1.0 / time_params["frame_dt"] + 1 )
         os.system(
             f"ffmpeg -framerate {fps} -i {args.output_path}/%04d.png -c:v libx264 -s {width}x{height} -y -pix_fmt yuv420p {args.output_path}/output.mp4"
         )

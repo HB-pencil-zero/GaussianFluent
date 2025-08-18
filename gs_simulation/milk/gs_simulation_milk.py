@@ -40,7 +40,6 @@ from utils.transformation_utils import *
 from utils.camera_view_utils import *
 from utils.render_utils import *
 from utils.lighting_utils import *
-from utils.normal_utils import *
 
 wp.init()
 wp.config.verify_cuda = True
@@ -462,30 +461,7 @@ if __name__ == "__main__":
     
     mpm_init_pos[:, 0] += 1.5
     mpm_init_pos[:, 1] += 1.5
-    
-    scale = 0.9
-    mpm_init_pos = (mpm_init_pos - mpm_init_pos.mean(dim = 0)) * scale + mpm_init_pos.mean(dim = 0)
-    mpm_init_cov =  mpm_init_cov  * (scale**2)
-    mpm_init_vol =  mpm_init_vol * (scale**3)
 
-    save_filepath = 'watermelon_new.pt'
-    
-    loaded_data = load_core_init_render_vars(save_filepath, map_location='cuda')
-    
-    pos2 = (loaded_data['mpm_init_pos'] - original_mean_pos) * scale_origin   
-    pos2[:, :2] =  pos2[:, :2] - pos2[:, :2].mean(dim=0) + mpm_init_pos[:, :2].mean(dim=0) 
-    pos2[:, 2] += 1.05
-    cov2 =  scale_origin * scale_origin * loaded_data["mpm_init_cov"]
-    vol2 = get_particle_volume(
-        pos2,
-        material_params["n_grid"],
-        material_params["grid_lim"] / material_params["n_grid"],
-        unifrom=material_params["material"] == "sand",
-    ).to(device=device) 
-
-    mpm_init_pos = torch.concat([mpm_init_pos, pos2], dim=0 )
-    mpm_init_cov = torch.concat([mpm_init_cov, cov2], dim=0 )
-    mpm_init_vol= torch.concat([mpm_init_vol, vol2], dim=0 )
 
 
 
@@ -588,8 +564,6 @@ if __name__ == "__main__":
     opacity_render = opacity
     shs_render = shs
     
-    opacity_render = torch.concat([opacity_render, loaded_data['opacity_render']], dim=0)
-    shs_render =  torch.concat([shs_render, loaded_data['shs_render']], dim=0)
     
     height = None
     width = None
@@ -604,30 +578,32 @@ if __name__ == "__main__":
     gs_num = mpm_init_pos.shape[0]
 
 
-    # gaussians2 = load_checkpoint("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden_ours")
-    # pos2 =  gaussians2._xyz.detach() * 5
-    # pos2[:, :2] += 4.3
-    # pos2[:, 2] -= 1
-    # cov3D2 = gaussians2.get_covariance() * 25
-    # rot2 = torch.eye(3, device="cuda").expand(gaussians2._xyz.shape[0], 3, 3)
-    # opacity_render2 = gaussians2.get_opacity
-    # shs_render2 = 1 * gaussians2.get_features
-
-    gaussians2 = load_checkpoint("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden")
-    transform_matrix = torch.from_numpy(np.loadtxt("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden/transform_matrix.txt")).to(device).float()
-    pos2 = gaussians2._xyz.detach()
-    pos2 = (pos2  @ transform_matrix[:3, :3].T  + transform_matrix[:3, 3])*3
-    pos2[:, 2] -= 2.6
-    pos2[:, 0] += 2.0 + 4.3
-    pos2[:, 1] += 1.0 + 4.3
-    cov3D2 = (rotate_flat_covariance(gaussians2.get_covariance(), transform_matrix[:3, :3])*3**2)
-    rot2 = torch.tensor(transform_matrix[:3, :3], dtype=torch.float32, device="cuda").detach().clone().unsqueeze(0).expand(gaussians2._xyz.shape[0], 3, 3)
+    gaussians2 = load_checkpoint("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden_ours")
+    pos2 =  gaussians2._xyz.detach() * 5
+    pos2[:, :2] += 4.3
+    pos2[:, 2] -= 1
+    cov3D2 = gaussians2.get_covariance() * 25
+    rot2 = torch.eye(3, device="cuda").expand(gaussians2._xyz.shape[0], 3, 3)
     opacity_render2 = gaussians2.get_opacity
-    shs_render2 = 1.0 * gaussians2.get_features
+    shs_render2 = 1 * gaussians2.get_features
+
+    # gaussians2 = load_checkpoint("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden")
+    # transform_matrix = torch.from_numpy(np.loadtxt("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden/transform_matrix.txt")).to(device).float()
+    # pos2 = gaussians2._xyz.detach()
+    # pos2 = (pos2  @ transform_matrix[:3, :3].T  + transform_matrix[:3, 3])*3
+    # pos2[:, 2] -= 1
+    # pos2[:, 0] += 2.0  + 4.3
+    # pos2[:, 1] += 1.0  + 4.3
+    # # pos2[:, 0] -= 2.0  
+    # # pos2[:, 1] -= 2.0
+    # cov3D2 = (rotate_flat_covariance(gaussians2.get_covariance(), transform_matrix[:3, :3])*3**2)
+    # rot2 = torch.tensor(transform_matrix[:3, :3], dtype=torch.float32, device="cuda").detach().clone().unsqueeze(0).expand(gaussians2._xyz.shape[0], 3, 3)
+    # opacity_render2 = gaussians2.get_opacity
+    # shs_render2 = 1.0 * gaussians2.get_features
 
 
     gaussians_watermenlon = load_checkpoint("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/watermelon")
-    mask = loaded_data['mask']
+
     for frame in tqdm(range(frame_num)):
         current_camera = get_camera_view(
             model_path,
@@ -649,8 +625,8 @@ if __name__ == "__main__":
         )
         
 
-        # for step in range(step_per_frame):
-        #     mpm_solver.p2g2p(step, substep_dt, device=device, flip_pic_ratio=material_params['flip_pic_ratio'])
+        for step in range(step_per_frame):
+            mpm_solver.p2g2p(step, substep_dt, device=device, flip_pic_ratio=material_params['flip_pic_ratio'])
 
         if args.output_ply or args.output_h5:
             save_data_at_frame(
@@ -732,37 +708,6 @@ if __name__ == "__main__":
 
                     command = 'cd /root/autodl-tmp/debug_physgaussian/cdmpmGaussian/ && source $(conda info --base)/etc/profile.d/conda.sh && conda activate PhysGaussian && python phong_model_wm_shs_15.py'
                     run_command_realtime(command)
-
-
-                    # _, _, point_xy2 = rasterize2(
-                    #     means3D=pos,
-                    #     means2D=init_screen_points,
-                    #     shs=None,
-                    #     colors_precomp=colors_precomp,
-                    #     opacities=opacity,
-                    #     scales=None,
-                    #     rotations=None,
-                    #     cov3D_precomp=cov3D,
-                    # )
-                    
-                    # # normal = compute_normals_pure_torch(pos)
-                    # normal  = np.load("valid_normals.npy")
-                    # normal = optimize_normals_consistency(pos.detach().cpu().numpy(), normal, k=30)
-                    # normal = torch.from_numpy(normal).cuda()
-                    # # normal = optimize_normals_consistency_pt_cuda_tensor_input(pos, normal , k=30)
-                    # light_bool_mask = calculate_occlusion_map_light_dist_angle_cuda(
-                    #     pos,
-                    #     point_xy2,
-                    #     current_camera2.camera_center
-                    # )
-                    
-                    # colors_precomp = apply_phong_lighting_to_gaussians_with_mask(
-                    #     gaussian_model = gaussians,
-                    #     viewpoint_camera = current_camera2,
-                    #     is_lit_mask = light_bool_mask,
-                    #     normals_override = normal ,
-                    #     mask=valid_mask
-                    # )
 
 
                 pos = torch.from_numpy(np.load("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/watermelon_frame/frame_20/pos.npy")).to("cuda")

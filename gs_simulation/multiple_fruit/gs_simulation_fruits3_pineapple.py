@@ -853,13 +853,13 @@ if __name__ == "__main__":
 
                 # pos_, cov3D_, rot_, opacity_, shs_ = load_and_concat_prop_dict("gs_simulation/multiple_fruit/save_tensor/kiwi.pt", pos_, cov3D_, rot_, opacity_, shs_, [4,1,-1.2])
                 
-                
+                # save_prop_dict('gs_simulation/multiple_fruit/save_tensor/pineapple.pt', pos_, cov3D_, rot_, opacity_, shs_ )
                 pos_ = torch.concat([pos_ , combined_scene_tensors['pos']],dim =0 )
                 cov3D_ = torch.concat([cov3D_, combined_scene_tensors['cov']],dim =0 )
                 rot_ = torch.concat([rot_, combined_scene_tensors['rot']],dim =0 )
                 opacity_ = torch.concat([opacity_ , combined_scene_tensors['opacity']],dim =0 )
                 shs_ = torch.concat([shs_, combined_scene_tensors['shs']],dim =0 )
-                # save_prop_dict('gs_simulation/multiple_fruit/save_tensor/pineapple.pt', pos_, cov3D_, rot_, opacity_, shs_ )
+
                 colors_precomp = convert_SH(shs_, current_camera, gaussians, pos_, rot_)
                 if color_flag:
                     colors_precomp[ valid_indice ]  = colors.clone()

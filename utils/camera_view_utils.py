@@ -169,11 +169,11 @@ def get_camera_view(
 
         width = 1280    
         height = 720    
-        width = int(raw_camera["width"])  
-        height = int(raw_camera["height"] )  
+        # width = int(raw_camera["width"])  
+        # height = int(raw_camera["height"] )  
 
-        width = 700  
-        height = 700
+        # width = 700  
+        # height = 700
         
         fovx = focal2fov( scales *raw_camera["fx"], width)
         fovy = focal2fov( scales * raw_camera["fy"], height)

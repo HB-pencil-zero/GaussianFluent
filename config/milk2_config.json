@@ -9,7 +9,7 @@
     "substep_dt": 1e-4,
     "grid_lim" : 5,  
     "frame_dt": 3e-2,
-    "frame_num": 50,
+    "frame_num": 360,
     "E": 1e3,
     "nu": 0.49,
     "friction_angle": 0.0,
@@ -24,7 +24,7 @@
     "g": [
         0.0,
         0,
-        -4
+        -10
     ],
 
     
@@ -58,23 +58,8 @@
             "friction": 0.0,
             "start_time": 0,
             "end_time": 1e3
-        },
-        {
-            "type": "enforce_particle_translation",
-            "point": [
-                2.4817, 2.4823, 0.0
-            ],
-            "size": [
-                2.5, 2.5, 1.25
-            ],
-            "velocity": [
-                0,
-                0,
-                0
-            ],
-            "start_time": 0,
-            "end_time": 1e3
         }
+
     ],
     "mpm_space_vertical_upward_axis": [
         0,
@@ -84,7 +69,7 @@
     "mpm_space_viewpoint_center": [
         2.5,
         2.5,
-        0
+        -0.2
     ],
     "default_camera_index": -1,
     "show_hint": false,

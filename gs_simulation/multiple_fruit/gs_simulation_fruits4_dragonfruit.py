@@ -712,6 +712,12 @@ if __name__ == "__main__":
                     camera_params['init_elevation'] = elvation_list[frame - start_id]
                     camera_params['init_radius'] = radius_list[frame - start_id]
                     viewpoint_center_worldspace = center_list[frame - start_id]
+                else:
+                    camera_params['init_azimuthm'] = azimuth_list[0]
+                    camera_params['init_elevation'] = elvation_list[0]
+                    camera_params['init_radius'] = radius_list[0]
+                    viewpoint_center_worldspace = center_list[0]
+                    
             except Exception as e:
                 camera_params['init_azimuthm'] = azimuth_list[-1]
                 camera_params['init_elevation'] = elvation_list[-1]

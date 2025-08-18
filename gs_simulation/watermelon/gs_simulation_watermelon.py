@@ -421,7 +421,7 @@ if __name__ == "__main__":
     width = None
     ti.reset()
     # torch.cuda.empty_cache()
-    color_flag = True
+    color_flag = False
     # color_flag = True
     
     load_color = True

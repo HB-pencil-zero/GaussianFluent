@@ -666,8 +666,8 @@ if __name__ == "__main__":
             center_view_world_space=viewpoint_center_worldspace,
             observant_coordinates=observant_coordinates,
             show_hint=camera_params["show_hint"],
-            init_azimuthm= azimith_list[0],#azimith_list[frame],
-            init_elevation= elevation_list[0],#elevation_list[frame],
+            init_azimuthm= azimith_list[frame],
+            init_elevation= elevation_list[frame],
             init_radius=camera_params["init_radius"],
             move_camera=camera_params["move_camera"],
             current_frame=frame,
@@ -839,13 +839,14 @@ if __name__ == "__main__":
             opacity_ = torch.concat([opacity , opacity_render2],dim =0 )
             shs_ = torch.concat([ scales.view(-1,1,1)  * shs, shs_render2],dim =0 )
             
-            # if frame == 0 :
-            #     scale__ , quat__ = extract_scaling_rotation_from_symm(cov3D_)
+
 
             colors_precomp = convert_SH(shs_, current_camera, gaussians, pos_, rot_)
             if color_flag:
                 colors_precomp[ valid_indice ]  = colors.clone()
 
+            # if frame == 0 :
+            #     scale__ , quat__ = extract_scaling_rotation_from_symm(cov3D_)
             # gausssians3 = load_checkpoint("model/bullet_0_psnr36") 
             # index = pos.shape[0]
             # gaussians._xyz = pos_[:index]
@@ -857,6 +858,7 @@ if __name__ == "__main__":
             # gaussians.save_ply("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/jelly/point_cloud/iteration_5000/point_cloud.ply")
             # gaussians._scaling = torch.concat([gaussians._scaling, gaussians3._scaling * (1/3), gaussians2._scaling])
             # gaussians._rotation = torch.concat([gaussians._rotation, gaussians3._rotation , gaussians2._rotation])
+            
             
             rendering, raddi, point_xy = rasterize(
                 means3D=pos_,

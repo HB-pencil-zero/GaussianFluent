@@ -17,12 +17,12 @@
     "n_grid": 300,
     "hardening": 1.0,
     "material": "watermelon",
-    "flip_pic_ratio" : 0.7,
+    "flip_pic_ratio" : 0.9,
     "density": 1,
     "g": [
         0.0,
         0,
-        -15
+        -30
     ],
 
     

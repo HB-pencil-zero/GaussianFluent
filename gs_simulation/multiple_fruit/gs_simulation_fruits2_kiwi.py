@@ -861,7 +861,8 @@ if __name__ == "__main__":
                 rot_ = torch.concat([rot, rot2],dim =0 )
                 opacity_ = torch.concat([opacity , opacity2],dim =0 )
                 shs_ = torch.concat([shs, shs2],dim =0 )                   
-                    
+                
+                # save_prop_dict('gs_simulation/multiple_fruit/save_tensor/kiwi.pt', pos_, cov3D_, rot_, opacity_, shs_ )
                 pos_ = torch.concat([pos_, combined_scene_tensors['pos']],dim =0 )
                 cov3D_ = torch.concat([cov3D_, combined_scene_tensors['cov']],dim =0 )
                 rot_ = torch.concat([rot_, combined_scene_tensors['rot']],dim =0 )
@@ -872,7 +873,7 @@ if __name__ == "__main__":
                 
                 colors_precomp = convert_SH(shs_, current_camera, gaussians, pos_, rot_)
 
-                # save_prop_dict('gs_simulation/multiple_fruit/save_tensor/kiwi.pt', pos_, cov3D_, rot_, opacity_, shs_ )
+
                 if color_flag:
                     colors_precomp[ valid_indice ]  = colors.clone()
 
