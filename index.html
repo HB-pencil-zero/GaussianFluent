@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="description"
+    content="Deformable Neural Radiance Fields creates free-viewpoint portraits (nerfies) from casually captured videos.">
+  <meta name="keywords" content="Nerfies, D-NeRF, NeRF">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GaussianFluent: Explicit Gaussian Simulation for Dynamic Object States
+    with Mixed Materials</title>
+
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-PYVRSFMDRL"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+
+    function gtag() {
+      dataLayer.push(arguments);
+    }
+
+    gtag('js', new Date());
+
+    gtag('config', 'G-PYVRSFMDRL');
+  </script>
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+
+  <link rel="stylesheet" href="static/css/bootstrap.min.css">
+  <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="static/css/fontawesome.all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="static/css/index.css">
+  <link rel="stylesheet" href="static/css/app.css">
+  <link rel="icon" href="static/images/icon.png">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="static/js/fontawesome.all.min.js"></script>
+  <script src="static/js/bulma-carousel.min.js"></script>
+  <script src="static/js/bulma-slider.min.js"></script>
+  <script src="static/js/index.js"></script>
+  <script src="static/js/video_comparison.js"></script>
+  <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
+</head>
+
+<body>
+  <section class="hero">
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <h1 class="title is-1 publication-title">GaussianFluent: Explicit Gaussian Simulation for Dynamic Object States
+              with Mixed Materials</h1>
+
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="hero teaser">
+    <div class="container is-max-desktop">
+      <div class="hero-body">
+        <!-- <video id="teaser" autoplay muted loop playsinline height="100%">
+          <source src="static/videos/teaser.mp4" type="video/mp4">
+        </video> -->
+        <img src="static/images/teaser.jpg" class="interpolation-image" />
+      </div>
+
+
+    </div>
+  </section>
+
+  <section class="hero is-light is-small">
+    <div class="hero-body">
+      <div class="container">
+        <div id="results-carousel" class="carousel results-carousel">
+          <div class="item item-jelly">
+            <video poster="" id="fox" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos2/jelly.mp4" type="video/mp4">
+            </video>
+          </div>
+
+          <div class="item item-lollipop">
+            <video poster="" id="plane" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos2/lollipop.mp4" type="video/mp4">
+            </video>
+          </div>
+
+
+          <div class="item item-cookie">
+            <video poster="" id="plane" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos2/cookie.mp4" type="video/mp4">
+            </video>
+          </div>
+
+          <div class="item item-milk">
+            <video poster="" id="plane" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos2/milk.mp4" type="video/mp4">
+            </video>
+          </div>
+
+
+
+          <div class="item item-kiwi">
+            <video poster="" id="plane" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos2/kiwi.mp4" type="video/mp4">
+            </video>
+          </div>
+
+
+          <div class="item item-pineapple">
+            <video poster="" id="plane" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos2/pineapple.mp4" type="video/mp4">
+            </video>
+          </div>
+
+          <div class="item item-dragonfruit">
+            <video poster="" id="ketchup" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos2/dragonfruit.mp4" type="video/mp4">
+            </video>
+          </div>
+
+          <div class="item item-sand_castle">
+            <video poster="" id="ketchup" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos2/sand_castle.mp4" type="video/mp4">
+            </video>
+          </div>
+
+          <div class="item item-toast">
+            <video poster="" id="ketchup" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos2/toast.mp4" type="video/mp4">
+            </video>
+          </div>
+
+
+
+        </div>
+      </div>
+    </div>
+  </section>
+  
+  <section class="section">
+    <div class="container is-max-desktop">
+      <!-- Abstract. -->
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-four-fifths">
+          <h2 class="title is-3">Abstract</h2>
+          <div class="content has-text-justified">
+            <p>
+              We propose <strong>GaussianFluent</strong>, a novel framework thatenables the completion of structurally consistent and photorealistic internal textures and
+              structures for Gaussian Splatting, thereby supporting mixed-material
+              physics simulation with dynamic lighting. In contrast to prior GS-based
+              simulation work that primarily focuses on surface and elastic materials,
+              GaussianFluent addresses three key challenges hindering realistic brittle
+              fracture simulation within the GS representation. First, the surface-centric
+              nature of GS leads to a lack of visually realistic internal structures and textures. Second, existing GS simulation efforts lack a method suitable for brittle
+              fracture phenomena. Third, the direct encoding of lighting information into
+              pherical Harmonic  in GS hampers the accurate representation of dynamic shading variations on newly exposed surfaces during fracture, even
+              when internal geometry and textures are correctly modeled. 
+            </p> 
+          <p>
+              To address these
+              limitations, GaussianFluent introduces a multi-view consistent internal
+              texture generation process, overcoming the challenges faced by existing generative models. We further present a Continuum Damage Mechanics
+              Material Point Method tailored for GS, enabling physically plausible simulation of brittle fracture. Additionally, we develop a Blinn-Phong
+              lighting system supporting multiple objects and light sources, together with
+              a robust normal estimation method to ensure faithful shadow and shading
+              variations throughout the fracture process. Experimental results demonstrate that GaussianFluent effectively reconstructs photorealistic internal
+              textures and delivers high-fidelity, real-time renderings across diverse object
+              state simulations, such as bullet shooting, fruit slicing, and watermelon
+              smashing, underscoring its potential for realistic animation and downstream
+              applications.
+            </p>
+          </div>
+        </div>
+      </div>
+      <!-- Paper video. -->
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-four-fifths">
+          <div class="publication-video">
+            <iframe src="./static/videos2/demo.mp4"
+                    frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+          </div>
+          <h2 class="subtitle has-text-centered">
+            <span class="dnerf">GaussianFluent</span> supports multple objects simulation, especially those with complex interior. And further supports scene relighting.
+          </h2>
+        </div>
+      </div>
+
+
+      <!--/ Paper video. -->
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3">Pipeline</h2>
+      <img src="static/images/workflow.jpg" class="interpolation-image" />
+      <p>
+        We propose GaussianFluent (Figure 3) to enable realistic simulation of dynamic scenes, particularly material fracture, within the
+        3DGS framework. Our method first generates internal structures
+        and textures for GS representations, followed by simulating fracture dynamics using a CD-MPM framework. To achieve realistic
+        rendering, we further incorporate dynamic lighting to accurately
+        visualize newly exposed fracture surfaces.
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+
+
+
+    <div class="container is-max-desktop">
+      <h2 class="title is-3">Physics-Integrated Continuum Damage  Gaussians</h2>
+      <!-- <div class="col-md-8 col-md-offset-2"> -->
+      <p>
+        We extend 3DGS simulation framework of PhysGaussian by incorporating the CD-MPM with support for mixed materials. 
+      </p>
+      <br>
+
+      <div class="container is-max-desktop">
+        <!-- <video id="teaser" autoplay muted loop playsinline height="100%">
+          <source src="static/videos/teaser.mp4" type="video/mp4">
+        </video> -->
+        <img src="./static/images/heatmap.jpg" class="interpolation-image" />
+        <h2 class="subtitle has-text-centered">
+          <span class="dnerf">GaussianFluent</span> 
+        </h2>
+      </div>
+
+      <!-- <div class="video-compare-container" id="materialsDiv">
+        <video class="video" id="materials" loop playsinline autoPlay muted
+          src="./static/videos/vasedeck_comparison.mp4" onplay="resizeAndPlay(this)"></video>
+        <canvas height=0 class="videoMerge" id="materialsMerge"></canvas>
+      </div> -->
+      <!-- </div> -->
+    </div>
+
+
+  </section>
+
+  <section class="section">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3">Different views of jelly-shooting simulations</h2>
+      <!-- <div class="col-md-8 col-md-offset-2"> -->
+      <p>
+        Different views of jelly-shooting simulations. An advantage of Gaussian Simulation is that it can render different views in real-time.
+      </p>
+      <br>
+      <div class="video-compare-container" id="materialsDiv">
+        <video class="video" id="materials" loop playsinline autoPlay muted
+          src="./static/videos2/side_by_side.mp4" onplay="resizeAndPlay(this)"></video>
+        <canvas height=0 class="videoMerge" id="materialsMerge"></canvas>
+      </div>
+      <!-- </div> -->
+    </div>
+  </section>
+
+
+  <section class="section">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3">Blinn-Phong based Gaussian Relighting</h2>
+      <p>
+        GaussianFluent supports scene relighting. Here are  examples of multiple objects relighting.
+      </p>
+      <br>
+      <div class="columns is-centered">
+        <div class="column">
+          <div class="content">
+            <h4 class="title is-size-5" style="text-align: center;"></h4>
+            <video id="dollyzoom" autoplay controls muted loop playsinline height="100%">
+              <source src="static/videos2/fruits_light.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      
+
+    </div>
+  </section>
+
+
+  <section class="section">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3">Interaction with Environment</h2>
+      <p>
+        Our method further support calcute lighting shadow and simulation with environment.  Here are two examples of watermelon interaction with environment. 
+      </p>
+      <br>
+      <!-- <div class="col-md-8 col-md-offset-2"> -->
+        <div class="columns is-centered">
+          <div class="column">
+            <div class="content">
+              <h4 class="title is-size-5" style="text-align: center;">Environment Shadow</h4>
+              <video id="dollyzoom" autoplay controls muted loop playsinline height="100%">
+                <source src="static/videos2/watermelon_light.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+  
+          <div class="column">
+            <div class="content">
+              <h4 class="title is-size-5" style="text-align: center;">Environment Collision</h4>
+              <video id="dollyzoom" autoplay controls muted loop playsinline height="100%">
+                <source src="static/videos2/milk_and_watermelon.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+      <!-- </div> -->
+    </div>
+  </section>
+
+
+
+
+
+
+
+    
+    </div>
+  </footer>
+
+</body>
+
+</html>
