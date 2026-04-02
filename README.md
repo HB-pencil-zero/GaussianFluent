@@ -65,6 +65,17 @@ By default, We use pytorch=2.0.1+cu117.
       journal={arXiv preprint arXiv:2601.09265},
       year={2026},
 }
+
+@article{wolper2019cd,
+  title={CD-MPM: Continuum damage material point methods for dynamic fracture animation},
+  author={Wolper, Joshuah and Fang, Yu and Li, Minchen and Lu, Jiecong and Gao, Ming and Jiang, Chenfanfu},
+  journal={ACM Transactions on Graphics (TOG)},
+  volume={38},
+  number={4},
+  pages={119},
+  year={2019},
+  publisher={ACM}
+}
 ```
 
 ## Acknowledgement
