@@ -35,17 +35,26 @@ pip install -e gaussian-splatting/submodules/simple-knn/
 By default, We use pytorch=2.0.1+cu117.
 
 ### Quick Start
-We provide pretrained Gaussian Splatting models and their corresponding `.json` config files in the `config` directory.
+1. **Download Pretrained Models**: 
+   Download the Gaussian Splatting models from our [Hugging Face Repository](https://huggingface.co/hbpencil01/GaussianFluent/tree/main).
+   Place the downloaded `model/` folder into the root directory of this project:
+   ```shell
+   # The structure should look like:
+   # ./model/watermelon/...
+   # ./model/jelly/...
+   # ./model/garden/...
+   ```
 
-To simulate a reconstructed 3D Gaussian Splatting scene, run the following command:
-```shell
-# For watermelon simulation
-python gs_simulation/watermelon/gs_simulation_watermelon.py --model_path <path to gs model> --output_path <path to output folder> --config config/watermelon_config.json --render_img --compile_video
+2. **Run Simulation**:
+   We provide corresponding `.json` config files in the `config` directory. Run the following commands to simulate:
+   ```shell
+   # For watermelon simulation
+   python gs_simulation/watermelon/gs_simulation_watermelon.py --model_path model/watermelon --output_path output/watermelon --config config/watermelon_config.json --render_img --compile_video
 
-# For jelly simulation
-python gs_simulation/jelly/gs_simulation_jellynacc.py --model_path <path to gs model> --output_path <path to output folder> --config config/jelly_config_nacc.json --render_img --compile_video
-```
-The images and video results will be saved to the specified output_path.
+   # For jelly simulation
+   python gs_simulation/jelly/gs_simulation_jellynacc.py --model_path model/jelly --output_path output/jelly --config config/jelly_config_nacc.json --render_img --compile_video
+   ```
+   The images and video results will be saved to the specified output path.
 
 ## Citation
 
