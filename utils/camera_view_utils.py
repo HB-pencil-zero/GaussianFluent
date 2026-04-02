@@ -105,6 +105,8 @@ def get_camera_view(
     delta_e=0,
     delta_r=0,
     scales = 1.1 ,
+    width = 1280,
+    height = 720,
 ):
     """Load one of the default cameras for the scene."""
     cam_path = os.path.join(model_path, "cameras.json")
@@ -167,8 +169,8 @@ def get_camera_view(
         T = C2W[:3, 3]
 
 
-        width = 1280    
-        height = 720    
+        # width = 1280    
+        # height = 720    
         # width = int(raw_camera["width"])  
         # height = int(raw_camera["height"] )  
 

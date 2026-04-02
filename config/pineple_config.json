@@ -9,21 +9,22 @@
     "substep_dt": 1e-4,
     "frame_dt": 3e-2,
     "frame_num": 60,
-    "E": 1e4,
+    "E": 2e4,
     "nu": 0.38,
     "grid_v_damping_scale": 0.9999,
-    "friction_angle": 45.0,
-    "beta": 3000000000,
+    "friction_angle": 0.0,
+    "beta": 0,
+    "alpha": 0,
     "xi": 3.0,
     "n_grid": 300,
     "hardening": 1.0,
     "material": "watermelon",
-    "flip_pic_ratio" : 0.0,
+    "flip_pic_ratio" : 0.9,
     "density": 1,
     "g": [
         0.0,
         0,
-        -30
+        -15
     ],
 
     "sim_area": [

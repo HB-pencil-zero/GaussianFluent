@@ -337,27 +337,26 @@ if __name__ == "__main__":
     mask2 = (gaussians._features_dc < 4).all(axis=2).cpu().numpy().squeeze()
     mask__ = mask1 & mask2
     
-    
-
-    # 2. 创建KNN搜索器
+    # Build a KNN radius-search index on all Gaussians.
     all_xyz_np = gaussians._xyz.detach().cpu().numpy()
     knn = NearestNeighbors(radius=0.03, algorithm='ball_tree')
     knn.fit(all_xyz_np)
 
-    # 3. 查找距离小于0.05的所有点的索引
+    # Select candidate "black seed" points by their DC feature range,
+    # then collect all neighboring points within a small radius.
     selected_xyz_np = selected_xyz.detach().cpu().numpy()
     neighbors_indices = knn.radius_neighbors(selected_xyz_np, 0.03, return_distance=False)
 
-    # 4. 将所有邻居点的索引展平并去重
+    # Flatten and deduplicate neighbor indices.
     all_neighbors = np.unique(np.concatenate(neighbors_indices))
 
-    # 5. 创建新的mask，包含所有邻近点
+    # Create a mask for the seed region and make it less brittle by
+    # assigning a very large beta (harder-to-break material behavior).
     new_mask = torch.zeros(gaussians._xyz.shape[0], dtype=torch.bool, device=gaussians._xyz.device)
     new_mask[all_neighbors] = True
     
     
     beta[new_mask.cpu().numpy()] = 3000000000
-    # beta[mask__] = 2
     
     mpm_solver.mpm_model.beta.assign(beta)
     
@@ -425,8 +424,8 @@ if __name__ == "__main__":
     # color_flag = True
     
     load_color = True
-    color_flag = True
-    light_flag = True
+    color_flag = False
+    light_flag = False
     end_frame = 23000000
     delta = 0 
 
@@ -470,6 +469,8 @@ if __name__ == "__main__":
             delta_a=camera_params["delta_a"],
             delta_e=camera_params["delta_e"],
             delta_r=camera_params["delta_r"],
+            width=600,
+            height=600
         )
         rasterize = initialize_resterize(
             current_camera, gaussians, pipeline, background
@@ -490,7 +491,7 @@ if __name__ == "__main__":
                 save_to_h5=args.output_h5,
             )
             
-
+        select_id = filter_gaussian_points_by_ellipsoid(tensor = mpm_init_pos, ellipsoid_center=torch.tensor([-0.1, 0.0, 0.0]), ellipsoid_axes=torch.tensor([0.22, 0.22, 0.22]), ellipsoid_greater=False)[1]
         if args.render_img:
             # Define a new base directory within args.output_path for detailed tensor data
             per_frame_tensor_output_base_dir = os.path.join(args.output_path, "gaussian_frame_data")
@@ -531,22 +532,6 @@ if __name__ == "__main__":
                 alpha = mpm_solver.mpm_state.particle_Jp.numpy()
                 mask = alpha > 0.4
                 opacity[mask] = 0
-                
-                # tensors_to_save = {
-                #         "pos.pt": pos,
-                #         "rot.pt": rot,  # This should be the rotation data (e.g., from gaussians.get_rotation() or the 'rot' used in convert_SH)
-                #         "cov3D.pt": cov3D, # This should be the covariance data (e.g., from gaussians.get_covariance() or the 'cov3D' used in rasterize)
-                #         "shs.pt": shs,  # This should be the SH coefficients (e.g., from gaussians.get_features() or the 'shs' used in convert_SH)
-                #         "opacity.pt": opacity # This should be the opacity data (e.g., from gaussians.get_opacity() or the 'opacity' used in rasterize)
-                # }
-
-                # for filename, tensor_data in tensors_to_save.items():
-                #     if tensor_data is not None:
-                #         save_path = os.path.join(current_frame_tensor_dir, filename)
-                #         # Detach from computation graph and move to CPU before saving (good practice)
-                #         torch.save(tensor_data.detach().cpu(), save_path)
-                #     else:
-                #         print(f"Warning: Tensor for {filename} in frame {frame} is None. Skipping save.")    
                 
             else:
                 # 从当前帧的目录加载保存的张量数据
@@ -631,33 +616,22 @@ if __name__ == "__main__":
 
             
 
+        
+            # pos_ = pos
+            # cov3D_ = cov3D
+            # rot_ = rot
+            # opacity_ =  opacity
+            # shs_ = shs
             
-            
-
-
 
         
-            pos_ = pos
-            cov3D_ = cov3D
-            rot_ = rot
-            opacity_ =  opacity
-            shs_ = shs
 
-            # pos_ = torch.concat([pos, pos2],dim =0 )
-            # cov3D_ = torch.concat([cov3D, cov3D2],dim =0 )
-            # rot_ = torch.concat([rot, rot2],dim =0 )
-            # opacity_ = torch.concat([opacity , opacity_render2],dim =0 )
-            # shs_ = torch.concat([shs, shs_render2],dim =0 )
+            pos_ = torch.concat([pos, pos2],dim =0 )
+            cov3D_ = torch.concat([cov3D, cov3D2],dim =0 )
+            rot_ = torch.concat([rot, rot2],dim =0 )
+            opacity_ = torch.concat([opacity , opacity_render2],dim =0 )
+            shs_ = torch.concat([shs, shs_render2],dim =0 )
             
-            # mask = ~torch.isnan(pos.mean(dim=1))
-            # pos = pos[mask]
-            # mpm_init_vol = mpm_init_vol[mask]
-            # mpm_init_cov = mpm_init_cov[mask]
-            # opacity_render = opacity_render[mask]
-            # shs = shs[mask]
-            # save_core_init_render_vars(
-            #     "watermelon_new.pt", pos, mpm_init_vol, mpm_init_cov, opacity_render, shs, mask
-            # )
 
             
             

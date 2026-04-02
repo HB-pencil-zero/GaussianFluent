@@ -534,13 +534,17 @@ if __name__ == "__main__":
     frame_sum = 0
     frame_num = 0 
     select_id__= []
-    # select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, y_greater=True, x_threshold=1.0, z_greater=False, z_threshold=1.0)[1] )
-    # select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=0.0, z_greater=False, z_threshold=1.0)[1] )
 
-    select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, y_greater=True, x_threshold=1.03)[1] )
-    select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=0.97)[1] )
-    select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=0)[1] )
-    select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=0)[1] )
+    # select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, y_greater=True, x_threshold=1.03)[1] )
+    # select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=0.97)[1] )
+    # select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=0)[1] )
+    # select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=0)[1] )
+
+    select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([-1.0, 0.0, 0.5]), plane_b=-0.00, plane_greater=False)[1] )
+    select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([-1.0, 0.0, 0.5]), plane_b=-0.01 , plane_greater=False)[1] )
+    select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([-1.0, 0.0, 0.5]), plane_b=0.01 , plane_greater=False)[1] )
+    select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([-1.0, 0.0, 0.5]), plane_b=0.18 , plane_greater=False)[1] )
+
     mpm_init_pos[:, 2] += 0.3
     for k in range(len(biases)):
         pos_flag = True
@@ -566,10 +570,6 @@ if __name__ == "__main__":
         # set up the mpm solver
         mpm_solver = MPM_Simulator_WARP(10)
         
-        # mpm_init_pos[:, 2] = mpm_init_pos[:, 2] - 0.5
-        # scale_factor =  1 / 3 
-        # mpm_init_cov *= scale_factor**2
-        # mpm_init_pos =  mpm_init_pos.mean(dim = 0) + scale_factor *(mpm_init_pos -  mpm_init_pos.mean(dim = 0))
 
         mpm_solver.load_initial_data_from_torch(
             mpm_init_pos[select_id],
@@ -580,38 +580,9 @@ if __name__ == "__main__":
         )
         mpm_solver.set_parameters_dict(material_params)
         
-        # beta = mpm_solver.mpm_model.beta.numpy()
-        # mask1 = (gaussians._features_dc < -0.5).all(axis=2).cpu().numpy().squeeze()
-        # mask2 = (gaussians._features_dc > -2.5).all(axis=2).cpu().numpy().squeeze()
-        # mask_ = mask1 & mask2
-        # selected_xyz = gaussians._xyz[mask_]
-        # mask1 = (gaussians._features_dc > 1.0).all(axis=2).cpu().numpy().squeeze()
-        # mask2 = (gaussians._features_dc < 4).all(axis=2).cpu().numpy().squeeze()
-        # mask__ = mask1 & mask2
-        
         
 
-        # # 2. 创建KNN搜索器
-        # all_xyz_np = gaussians._xyz.detach().cpu().numpy()
-        # knn = NearestNeighbors(radius=0.03, algorithm='ball_tree')
-        # knn.fit(all_xyz_np)
 
-        # # 3. 查找距离小于0.05的所有点的索引
-        # selected_xyz_np = selected_xyz.detach().cpu().numpy()
-        # neighbors_indices = knn.radius_neighbors(selected_xyz_np, 0.03, return_distance=False)
-
-        # # 4. 将所有邻居点的索引展平并去重
-        # all_neighbors = np.unique(np.concatenate(neighbors_indices))
-
-        # # 5. 创建新的mask，包含所有邻近点
-        # new_mask = torch.zeros(gaussians._xyz.shape[0], dtype=torch.bool, device=gaussians._xyz.device)
-        # new_mask[all_neighbors] = True
-        
-        
-        # beta[new_mask.cpu().numpy()] = 3000000000
-        # beta[mask__] = 2
-        
-        # mpm_solver.mpm_model.beta.assign(beta)
         
         
         

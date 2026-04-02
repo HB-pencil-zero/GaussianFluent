@@ -109,7 +109,7 @@ class MPM_Simulator_WARP:
         self.mpm_state.particle_Jp = wp.full(
             shape=n_particles, 
             value=-0.04, 
-            dtype=wp.float32,  # 建议明确指定精度
+            dtype=wp.float32,
             device=device
         )
 
@@ -869,11 +869,10 @@ class MPM_Simulator_WARP:
             dt: float,
             state: MPMStateStruct,
             param: Dirichlet_collider,
-            threshold_index: int  # 粒子索引阈值
+            threshold_index: int
         ):
-            p = wp.tid()  # 获取当前粒子的一维索引
+            p = wp.tid()
             if time >= param.start_time and time < param.end_time:
-                # 如果粒子索引超过阈值，则重置速度
                 if p >= threshold_index:
                     state.particle_v[p] = wp.vec3(0.0, 0.0, 0.0)
             elif param.reset == 1:

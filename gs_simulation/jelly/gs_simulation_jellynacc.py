@@ -284,6 +284,7 @@ if __name__ == "__main__":
     parser.add_argument("--white_bg", action="store_true")
     parser.add_argument("--debug", action="store_true") 
     parser.add_argument("--load_from_saved", action="store_true")
+    parser.add_argument("--render_second_view", action="store_true", help="是否渲染第二个相机视角", default=True)
     args = parser.parse_args()
 
     if not os.path.exists(args.model_path):
@@ -296,6 +297,17 @@ if __name__ == "__main__":
         import shutil
         config_name = os.path.basename(args.config)
         shutil.copy2(args.config, os.path.join(args.output_path, config_name))
+
+    # 为第二个视角准备输出路径
+    output_path2 = None
+    if args.render_second_view and args.output_path:
+        output_path2 = args.output_path + "2"
+        if not os.path.exists(output_path2):
+            os.makedirs(output_path2)
+            # 复制config文件到第二个视角的输出目录
+            import shutil
+            config_name = os.path.basename(args.config)
+            shutil.copy2(args.config, os.path.join(output_path2, config_name))
 
     # load scene config
     print("Loading scene config...")
@@ -679,6 +691,27 @@ if __name__ == "__main__":
         rasterize = initialize_resterize(
             current_camera, gaussians, pipeline, background
         )
+        
+        current_camera2 = get_camera_view(
+            model_path,
+            default_camera_index=-1,
+            center_view_world_space=viewpoint_center_worldspace,
+            observant_coordinates=observant_coordinates,
+            show_hint=camera_params["show_hint"],
+            init_azimuthm= azimith_list[frame] - 100,
+            init_elevation= elevation_list[frame] + 30,
+            init_radius=camera_params["init_radius"],
+            move_camera=camera_params["move_camera"],
+            current_frame=frame,
+            delta_a=camera_params["delta_a"],
+            delta_e=camera_params["delta_e"],
+            delta_r=camera_params["delta_r"],
+            scales=1
+        )
+        rasterize2 = initialize_resterize(
+            current_camera2, gaussians, pipeline, background
+        )
+        
 
         if not args.load_from_saved :
             if frame < 20  or (frame >= 200 and frame < 240) or frame > 380: 
@@ -702,11 +735,17 @@ if __name__ == "__main__":
         # Create a subdirectory for the current frame's tensors
         current_frame_tensor_dir = os.path.join(per_frame_tensor_output_base_dir, f"frame_{frame:05d}") # e.g., frame_00000, frame_00001
         os.makedirs(current_frame_tensor_dir, exist_ok=True)
-        light_output_base_dir = os.path.join(args.output_path, "normal_and_light")
+        light_output_base_dir = os.path.join(args.output_path, "normaland_light")
         os.makedirs(light_output_base_dir, exist_ok=True)
         
         current_frame_light_dir = os.path.join(light_output_base_dir, f"frame_{frame:05d}") # e.g., frame_00000, frame_00001
         os.makedirs(current_frame_light_dir, exist_ok=True)
+        
+        # 为第二个视角创建输出文件夹
+        if args.render_img and args.render_second_view:
+            # 第二个视角的文件夹已经在开始部分创建，这里只需要确保存在
+            pass
+        
         if args.render_img:
             # 获取初始数据
             if not args.load_from_saved :
@@ -744,13 +783,6 @@ if __name__ == "__main__":
                     "opacity.pt": opacity # This should be the opacity data (e.g., from gaussians.get_opacity() or the 'opacity' used in rasterize)
                 }
 
-                # for filename, tensor_data in tensors_to_save.items():
-                #     if tensor_data is not None:
-                #         save_path = os.path.join(current_frame_tensor_dir, filename)
-                #         # Detach from computation graph and move to CPU before saving (good practice)
-                #         torch.save(tensor_data.detach().cpu(), save_path)
-                #     else:
-                #         print(f"Warning: Tensor for {filename} in frame {frame} is None. Skipping save.")   
 
             else:    
                 # 从当前帧的目录加载保存的张量数据
@@ -777,7 +809,7 @@ if __name__ == "__main__":
                 shs = tensors_to_load["shs.pt"]
                 opacity = tensors_to_load["opacity.pt"]
                     
-                light_output_base_dir = os.path.join(args.output_path, "normal_and_light")
+                light_output_base_dir = os.path.join(args.output_path, "normaland_light")
                 os.makedirs(light_output_base_dir, exist_ok=True)
                 
                 current_frame_light_dir = os.path.join(light_output_base_dir, f"frame_{frame:05d}") # e.g., frame_00000, frame_00001
@@ -844,21 +876,6 @@ if __name__ == "__main__":
             colors_precomp = convert_SH(shs_, current_camera, gaussians, pos_, rot_)
             if color_flag:
                 colors_precomp[ valid_indice ]  = colors.clone()
-
-            # if frame == 0 :
-            #     scale__ , quat__ = extract_scaling_rotation_from_symm(cov3D_)
-            # gausssians3 = load_checkpoint("model/bullet_0_psnr36") 
-            # index = pos.shape[0]
-            # gaussians._xyz = pos_[:index]
-            # gaussians._opacity = opacity_[:index]
-            # gaussians._features_rest = shs_[:, 1:][:index]
-            # gaussians._features_dc = shs_[:, :1][:index]
-            # gaussians._scaling = scale__[:index]
-            # gaussians._rotation = quat__[:index]
-            # gaussians.save_ply("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/jelly/point_cloud/iteration_5000/point_cloud.ply")
-            # gaussians._scaling = torch.concat([gaussians._scaling, gaussians3._scaling * (1/3), gaussians2._scaling])
-            # gaussians._rotation = torch.concat([gaussians._rotation, gaussians3._rotation , gaussians2._rotation])
-            
             
             rendering, raddi, point_xy = rasterize(
                 means3D=pos_,
@@ -886,11 +903,59 @@ if __name__ == "__main__":
                 os.path.join(args.output_path, f"{frame}.png".rjust(8, "0")),
                 255 * cv2_img,
             )
+            
+            # 渲染第二个视角（如果启用）
+            if args.render_img and args.render_second_view and output_path2:
+                # 确保第二个视角的子文件夹存在
+                per_frame_tensor_output_base_dir2 = os.path.join(output_path2, "gaussian_frame_data")
+                os.makedirs(per_frame_tensor_output_base_dir2, exist_ok=True)
+                current_frame_tensor_dir2 = os.path.join(per_frame_tensor_output_base_dir2, f"frame_{frame:05d}")
+                os.makedirs(current_frame_tensor_dir2, exist_ok=True)
+                light_output_base_dir2 = os.path.join(output_path2, "normaland_light")
+                os.makedirs(light_output_base_dir2, exist_ok=True)
+                current_frame_light_dir2 = os.path.join(light_output_base_dir2, f"frame_{frame:05d}")
+                os.makedirs(current_frame_light_dir2, exist_ok=True)
+                
+                # 为第二个视角计算屏幕点
+                
+                # 渲染第二个视角
+                colors_precomp2 = convert_SH(shs_, current_camera2, gaussians, pos_, rot_)
+                if color_flag:
+                    colors_precomp2[valid_indice] = colors.clone()
+                
+                rendering2, raddi2, point_xy2 = rasterize2(
+                    means3D=pos_,
+                    means2D=init_screen_points,
+                    shs=None,
+                    colors_precomp=colors_precomp2.float(),
+                    opacities=opacity_, 
+                    scales=None,
+                    rotations=None,
+                    cov3D_precomp=cov3D_,
+                )
+                
+                # 保存第二个视角的图像
+                cv2_img2 = rendering2.permute(1, 2, 0).detach().cpu().numpy()
+                cv2_img2 = cv2.cvtColor(cv2_img2, cv2.COLOR_BGR2RGB)
+                cv2.imwrite(
+                    os.path.join(output_path2, f"{frame}.png".rjust(8, "0")),
+                    255 * cv2_img2,
+                )
+            
             if frame > end_frame:
                 light_flag = False
+                
+    # 编译第一个视角的视频
     if args.render_img and args.compile_video:
         fps = int(1.0 / time_params["frame_dt"] /35 )
         os.system(
             f"ffmpeg -framerate {fps} -i {args.output_path}/%04d.png -c:v libx264 -s {width}x{height} -y -pix_fmt yuv420p {args.output_path}/output.mp4"
+        )
+    
+    # 编译第二个视角的视频（如果启用）
+    if args.render_img and args.compile_video and args.render_second_view and output_path2:
+        fps = int(1.0 / time_params["frame_dt"] /35 )
+        os.system(
+            f"ffmpeg -framerate {fps} -i {output_path2}/%04d.png -c:v libx264 -s {width}x{height} -y -pix_fmt yuv420p {output_path2}/output.mp4"
         )
 

@@ -538,7 +538,7 @@ if __name__ == "__main__":
     # select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=0.0, z_greater=False, z_threshold=1.0)[1] )
 
     select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, y_greater=True, x_threshold=1.03)[1] )
-    select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=0.97)[1] )
+    select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=0.98)[1] )
     select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=0)[1] )
     select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=0)[1] )
     mpm_init_pos[:, 2] += 0.3
@@ -592,26 +592,26 @@ if __name__ == "__main__":
         
 
         # # 2. 创建KNN搜索器
-        # all_xyz_np = gaussians._xyz.detach().cpu().numpy()
-        # knn = NearestNeighbors(radius=0.03, algorithm='ball_tree')
-        # knn.fit(all_xyz_np)
+        all_xyz_np = gaussians._xyz.detach().cpu().numpy()
+        knn = NearestNeighbors(radius=0.03, algorithm='ball_tree')
+        knn.fit(all_xyz_np)
 
-        # # 3. 查找距离小于0.05的所有点的索引
-        # selected_xyz_np = selected_xyz.detach().cpu().numpy()
-        # neighbors_indices = knn.radius_neighbors(selected_xyz_np, 0.03, return_distance=False)
+        # 3. 查找距离小于0.05的所有点的索引
+        selected_xyz_np = selected_xyz.detach().cpu().numpy()
+        neighbors_indices = knn.radius_neighbors(selected_xyz_np, 0.03, return_distance=False)
 
-        # # 4. 将所有邻居点的索引展平并去重
-        # all_neighbors = np.unique(np.concatenate(neighbors_indices))
+        # 4. 将所有邻居点的索引展平并去重
+        all_neighbors = np.unique(np.concatenate(neighbors_indices))
 
-        # # 5. 创建新的mask，包含所有邻近点
-        # new_mask = torch.zeros(gaussians._xyz.shape[0], dtype=torch.bool, device=gaussians._xyz.device)
-        # new_mask[all_neighbors] = True
+        # 5. 创建新的mask，包含所有邻近点
+        new_mask = torch.zeros(gaussians._xyz.shape[0], dtype=torch.bool, device=gaussians._xyz.device)
+        new_mask[all_neighbors] = True
         
         
-        # beta[new_mask.cpu().numpy()] = 3000000000
-        # beta[mask__] = 2
+        beta[new_mask.cpu().numpy()] = 3000000000
+        beta[mask__] = 2
         
-        # mpm_solver.mpm_model.beta.assign(beta)
+        mpm_solver.mpm_model.beta.assign(beta)
         
         
         
@@ -877,7 +877,8 @@ if __name__ == "__main__":
 
 
                 # pos_, cov3D_, rot_, opacity_, shs_ = load_and_concat_prop_dict("gs_simulation/multiple_fruit/save_tensor/pineapple.pt", pos_, cov3D_, rot_, opacity_, shs_, [2.8, -2,-1.2])
-                # save_prop_dict('gs_simulation/multiple_fruit/save_tensor/fruits.pt', pos_, cov3D_, rot_, opacity_, shs_ )
+                if frame == 300:
+                    save_prop_dict('gs_simulation/multiple_fruit/save_tensor/fruits.pt', pos_, cov3D_, rot_, opacity_, shs_ )
                 
                 colors_precomp = convert_SH(shs_, current_camera, gaussians, pos_, rot_)
                 if color_flag:

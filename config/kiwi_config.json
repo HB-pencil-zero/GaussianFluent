@@ -72,7 +72,7 @@
     "init_elevation": 10.0,
     "init_radius": 7.5,
     "move_camera": true,
-    "delta_a": 0.2,
+    "delta_a": 2,
     "delta_e": 0,
     "delta_r": 0.0
 }

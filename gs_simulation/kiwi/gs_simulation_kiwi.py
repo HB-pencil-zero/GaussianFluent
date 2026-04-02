@@ -43,6 +43,37 @@ from utils.lighting_utils import *
 
 import torch
 
+def rgb_to_rgba_with_transparency(rgb_img):
+    """
+    将RGB图像转换为RGBA格式，并将纯白色(1,1,1)转换为透明
+    
+    参数:
+        rgb_img: RGB图像，值范围[0,1]
+    
+    返回:
+        RGBA图像，值范围[0,255]
+    """
+    # 确保输入是numpy数组
+    if isinstance(rgb_img, torch.Tensor):
+        rgb_img = rgb_img.detach().cpu().numpy()
+    
+    # 创建RGBA图像
+    rgba_img = np.zeros((rgb_img.shape[0], rgb_img.shape[1], 4), dtype=np.uint8)
+    
+    # 复制RGB通道，缩放到[0,255]
+    rgba_img[:, :, :3] = (rgb_img * 255).astype(np.uint8)
+    
+    # 计算alpha通道：纯白色(1,1,1)变为透明(alpha=0)，其他颜色保持不透明(alpha=255)
+    # 检查是否为纯白色（允许小的误差）
+    white_threshold = 0.99  # 接近1的值都认为是白色
+    is_white = np.all(rgb_img >= white_threshold, axis=2)
+    
+    # 设置alpha通道：白色区域为0（透明），其他区域为255（不透明）
+    rgba_img[:, :, 3] = np.where(is_white, 0, 255)
+    
+    return rgba_img
+
+
 def filter_gaussian_points_by_xyz(tensor,
                                   x_threshold=None, y_threshold=None, z_threshold=None,
                                   x_greater=True, y_greater=True, z_greater=True,
@@ -349,6 +380,7 @@ if __name__ == "__main__":
     parser.add_argument("--render_img", action="store_true")
     parser.add_argument("--compile_video", action="store_true")
     parser.add_argument("--white_bg", action="store_true")
+    parser.add_argument("--transparent_bg", action="store_true", default=False, help="Enable transparent background rendering (white pixels become transparent)")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--load_from_saved", action="store_true", help="Load simulation data from saved .pt files instead of running the simulation.")
     args = parser.parse_args()
@@ -526,17 +558,28 @@ if __name__ == "__main__":
         print("check *.ply files to see if it's ready for simulation")
 
     biases = [0.25, 0.20, 0.14, 0.10 ]  #pineple
-    frames = [50,  50, 50, 150] 
-    # biases = [ 0.12 ] 
-    # frames = [100] 
+    # frames = [50,  50, 50, 150] 
+    frames = [100,  100, 100, 150] 
     select_id = torch.tensor([], dtype=torch.int).cuda()
     frame_sum = 0
     frame_num = 0 
     select_id__= []
-    select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, y_greater=True, y_threshold=1.1, z_greater=False, z_threshold=1.0)[1] )
-    select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=1.02, z_greater=False, z_threshold=1.0)[1] )
+    # select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, y_greater=True, y_threshold=1.1, z_greater=False, z_threshold=1.0)[1] )
+    # select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=1.02, z_greater=False, z_threshold=1.0)[1] )
+    select_id__.append(filter_gaussian_points_by_ellipsoid(tensor = mpm_init_pos, ellipsoid_center=torch.tensor([-0.1, 0.0, 0.0]), ellipsoid_axes=torch.tensor([0.22, 0.22, 0.22]), ellipsoid_greater=False)[1] )
+    select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([1.0, -1.0, 1.5]), plane_b=0.0, plane_greater=False)[1] )
+    select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([-1.0, 1.0, 1.5]), plane_b=0.0, plane_greater=False)[1] )
+    select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([1.0, -1.0, 1.0]), plane_b=0.0, plane_greater=False)[1] )
+    select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([1.0, -1.0, 1.0]), plane_b=-0.25, plane_greater=False)[1] )
+    
+    # 球形截面示例：选择球心在(0,0,0)，半径为1.5的球内部分
+    # select_id__.append(filter_gaussian_points_by_sphere(tensor=mpm_init_pos, sphere_center=[0.0, 0.0, 0.0], sphere_radius=1.5, sphere_greater=False)[1])
+    
+    # 椭球形截面示例：选择椭球心在(0,0,0)，三个轴长为[1.0, 1.5, 2.0]的椭球内部分
+    # select_id__.append(filter_gaussian_points_by_ellipsoid(tensor=mpm_init_pos, ellipsoid_center=[0.0, 0.0, 0.0], ellipsoid_axes=[1.0, 1.5, 2.0], ellipsoid_greater=False)[1])
 
     mpm_init_pos[:, 2] += 0.3
+
     for k in range(len(biases)):
         pos_flag = True
         cal_bias = False
@@ -546,11 +589,13 @@ if __name__ == "__main__":
         bias = biases[k]
         frame_sum += frame_num
         frame_num = frames[k]
-        _ , select_id__ = filter_tensor_by_hyperplanes_delta(mpm_init_pos, [(torch.tensor([x_tag, y_tag, 0.0]), base_bias + bias)] , cov=mpm_init_cov, pos=[pos_flag], cal_bias=cal_bias, delta=0.03)
-        select_id = torch.concat([select_id, select_id__])
+
+        # 切片的实现 
+        # _ , select_id__ = filter_tensor_by_hyperplanes_delta(mpm_init_pos, [(torch.tensor([x_tag, y_tag, 0.0]), base_bias + bias)] , cov=mpm_init_cov, pos=[pos_flag], cal_bias=cal_bias, delta=0.03)
+        # select_id = torch.concat([select_id, select_id__])
         
         
-        # select_id = torch.concat([select_id, select_id__[k]])
+        select_id = torch.concat([select_id, select_id__[k]])
         select_id = torch.unique(select_id)
 
 
@@ -685,10 +730,10 @@ if __name__ == "__main__":
                 current_camera, gaussians, pipeline, background
             )
             
-            if not args.load_from_saved :
-                # if frame < 195:
-                    for step in range(step_per_frame):
-                        mpm_solver.p2g2p(step, substep_dt, device=device, flip_pic_ratio=material_params['flip_pic_ratio'])
+            # if not args.load_from_saved :
+            #     # if frame < 195:
+            #         for step in range(step_per_frame):
+            #             mpm_solver.p2g2p(step, substep_dt, device=device, flip_pic_ratio=material_params['flip_pic_ratio'])
 
             if args.output_ply or args.output_h5:
                 save_data_at_frame(
@@ -819,13 +864,18 @@ if __name__ == "__main__":
                     colors = torch.from_numpy(np.load(os.path.join(output_folder, "phong_colors.npy"))).to("cuda").reshape(-1 , 3).float()
 
                 
-                pos_ = pos
-                cov3D_ = cov3D
-                rot_ = rot
-                opacity_ =  opacity
-                shs_ = shs
+                # pos_ = pos
+                # cov3D_ = cov3D
+                # rot_ = rot
+                # opacity_ =  opacity
+                # shs_ = shs
                 
-                
+                                
+                pos_ = pos[select_id]
+                cov3D_ = cov3D[select_id]
+                rot_ = rot[select_id]
+                opacity_ =  opacity[select_id]
+                shs_ = shs[select_id]
                     
                 # pos_ = torch.concat([pos, pos2],dim =0 )
                 # cov3D_ = torch.concat([cov3D, cov3D2],dim =0 ) 
@@ -864,131 +914,21 @@ if __name__ == "__main__":
                     height = cv2_img.shape[0] // 2 * 2
                     width = cv2_img.shape[1] // 2 * 2
                 assert args.output_path is not None
-                cv2.imwrite(
-                    os.path.join(args.output_path, f"{frame}.png".rjust(8, "0")),
-                    255 * cv2_img,
-                )
-                if frame > end_frame:
-                    light_flag = False
-
-                    # 获取初始数据
-                    pos = mpm_solver.export_particle_x_to_torch().to(device)
-                    cov3D = mpm_solver.export_particle_cov_to_torch()
-                    rot = mpm_solver.export_particle_R_to_torch()
-                    cov3D = cov3D.view(-1, 6).to(device)
-                    rot = rot.view(-1, 3, 3).to(device)
-
-
-                    mpm_init_pos[indice] = pos
-                    mpm_init_cov[indice] = cov3D
-                    identity_matrix_3x3 = torch.eye(3, dtype=mpm_init_pos.dtype, device=mpm_init_pos.device)
-                    identity_flat_9d = identity_matrix_3x3.flatten()
-                    mpm_init_rot = identity_flat_9d.unsqueeze(0).expand(mpm_init_pos.shape[0], -1).reshape(-1, 3, 3).clone()
-                    mpm_init_rot[indice] = rot
-                    pos = mpm_init_pos
-                    cov3D = mpm_init_cov
-                    rot = mpm_init_rot
-
-                                
-                    # 应用变换
-                    pos = apply_inverse_rotations(
-                        undotransform2origin(
-                            undoshift2center111(pos), scale_origin, original_mean_pos
-                        ),
-                        rotation_matrices,
+                
+                if args.transparent_bg:
+                    # 转换为RGBA格式，纯白色变为透明
+                    rgba_img = rgb_to_rgba_with_transparency(cv2_img)
+                    # 保存为PNG格式（支持透明度）
+                    cv2.imwrite(
+                        os.path.join(args.output_path, f"{frame}.png".rjust(8, "0")),
+                        rgba_img,
                     )
-                    
-                    
-                    cov3D = cov3D / (scale_origin * scale_origin)
-                    cov3D = apply_inverse_cov_rotations(cov3D, rotation_matrices)
-
-
-
-
-                    # 如果有sim_area,添加未选择的点
-                    if preprocessing_params["sim_area"] is not None:
-                        pos = torch.cat([pos, unselected_pos], dim=0)
-                        cov3D = torch.cat([cov3D, unselected_cov], dim=0)
-                        opacity = torch.cat([opacity_render, unselected_opacity], dim=0)
-                        shs = torch.cat([shs_render, unselected_shs], dim=0)
-
-                    # opacity = opacity_render[select_id]
-                    # shs = shs_render[select_id]
-                    
-                    opacity = opacity_render
-                    shs = shs_render
-                    
-                    # 检测并移除含有nan的点
-                    # valid_mask = ~torch.isnan(pos).any(dim=1)
-                    # pos = pos[valid_mask]
-                    # cov3D = cov3D[valid_mask]
-                    # rot = rot[valid_mask]
-                    # opacity = opacity[valid_mask]
-                    # shs = shs[valid_mask]
-
-                    pos_ = torch.concat([pos, pos2],dim =0 )
-                    cov3D_ = torch.concat([cov3D, cov3D2],dim =0 )
-                    rot_ = torch.concat([rot, rot2],dim =0 )
-                    opacity_ = torch.concat([opacity_render, opacity_render2],dim =0 )
-                    shs_ = torch.concat([shs_render, shs_render2],dim =0 )
-
-
-                    colors_precomp = convert_SH(shs_, current_camera, gaussians, pos_, rot_)
-
-                    
-
-                    
-                    
-                    rendering, raddi, point_xy = rasterize(
-                        means3D=pos_,
-                        means2D=init_screen_points,
-                        shs=None,
-                        colors_precomp=colors_precomp.float(),
-                        opacities=opacity_, 
-                        scales=None,
-                        rotations=None,
-                        cov3D_precomp=cov3D_,
-                    )
-                    
-                    
-                    per_frame_tensor_output_base_dir = os.path.join(args.output_path, "gaussian_frame_data")
-                    os.makedirs(per_frame_tensor_output_base_dir, exist_ok=True)
-
-                    # Create a subdirectory for the current frame's tensors
-                    current_frame_tensor_dir = os.path.join(per_frame_tensor_output_base_dir, f"frame_{frame:05d}") # e.g., frame_00000, frame_00001
-                    os.makedirs(current_frame_tensor_dir, exist_ok=True)
-
-                    # Tensors to save for the current frame.
-                    # Ensure these variables hold the correct data for the *current frame* at this point.
-                    tensors_to_save = {
-                        "pos.pt": pos,
-                        "rot.pt": rot,  # This should be the rotation data (e.g., from gaussians.get_rotation() or the 'rot' used in convert_SH)
-                        "cov3D.pt": cov3D, # This should be the covariance data (e.g., from gaussians.get_covariance() or the 'cov3D' used in rasterize)
-                        "shs.pt": shs,  # This should be the SH coefficients (e.g., from gaussians.get_features() or the 'shs' used in convert_SH)
-                        "opacity.pt": opacity # This should be the opacity data (e.g., from gaussians.get_opacity() or the 'opacity' used in rasterize)
-                    }
-
-                    # for filename, tensor_data in tensors_to_save.items():
-                    #     if tensor_data is not None:
-                    #         save_path = os.path.join(current_frame_tensor_dir, filename)
-                    #         # Detach from computation graph and move to CPU before saving (good practice)
-                    #         torch.save(tensor_data.detach().cpu(), save_path)
-                    #     else:
-                    #         print(f"Warning: Tensor for {filename} in frame {frame} is None. Skipping save.")    
-                            
-                    
-                    cv2_img = rendering.permute(1, 2, 0).detach().cpu().numpy()
-                    cv2_img = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
-                    if height is None or width is None:
-                        height = cv2_img.shape[0] // 2 * 2
-                        width = cv2_img.shape[1] // 2 * 2
-                    assert args.output_path is not None
+                else:
+                    # 保存为普通RGB格式
                     cv2.imwrite(
                         os.path.join(args.output_path, f"{frame}.png".rjust(8, "0")),
                         255 * cv2_img,
                     )
-                    if frame > end_frame:
-                        light_flag = False
     if args.render_img and args.compile_video:
         fps = int(1.0 / time_params["frame_dt"] / 1.2)
         os.system(

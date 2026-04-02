@@ -531,9 +531,16 @@ if __name__ == "__main__":
     frame_sum = 0
     frame_num = 0 
     select_id__= []
+    
+    select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=1.02, z_greater=False, z_threshold=1.0)[1] )
     select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, y_greater=True, y_threshold=1.1, z_greater=False, z_threshold=1.0)[1] )
+
     select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=1.02, z_greater=False, z_threshold=1.0)[1] )
-    select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=1.02, z_greater=False, z_threshold=1.0)[1] )
+
+    # select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([-1.0, 1.0, 1.0]), plane_b=-0.3, plane_greater=False)[1] )
+    # select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([1.0, -1.0, 1.0]), plane_b=-0.3, plane_greater=False)[1] )
+    # select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([1.0, -1.0, 1.0]), plane_b=10000, plane_greater=False)[1] )
+    
     mpm_init_pos[:, 2] += 0.3
     for k in range(len(biases)):
         pos_flag = True
@@ -623,7 +630,7 @@ if __name__ == "__main__":
         def evaluate_sound_speed_linear_elasticity_analysis(E, nu, rho):
             return np.sqrt(E * (1 - nu) / ((1 + nu) * (1 - 2 * nu) * rho))
         cfl = 0.6
-        substep_dt = cfl * dx / evaluate_sound_speed_linear_elasticity_analysis(E, nu, rho)
+        substep_dt = cfl * dx / evaluate_sound_speed_linear_elasticity_analysis(E, nu, rho)   
         frame_dt = time_params["frame_dt"]
         # frame_num = time_params["frame_num"]
         step_per_frame = int(frame_dt / substep_dt)
@@ -637,10 +644,7 @@ if __name__ == "__main__":
         # color_flag = True
         light_flag = True
         end_frame = 1000
-        # alpha = mpm_solver.mpm_state.particle_Jp.numpy()
-        # alpha[select_id.cpu().numpy()] = 500000000
-        # mpm_solver.mpm_state.particle_Jp.assign(alpha)
-        
+
 
 
         scene_to_create_config = [
@@ -817,6 +821,10 @@ if __name__ == "__main__":
                 current_frame_light_dir = os.path.join(light_output_base_dir, f"frame_{frame:05d}") # e.g., frame_00000, frame_00001
                 os.makedirs(current_frame_light_dir, exist_ok=True)
                 
+                # alpha = mpm_solver.mpm_state.particle_Jp.numpy()
+                # alpha[select_id.cpu().numpy()] = 500000000
+                # mpm_solver.mpm_state.particle_Jp.assign(alpha)
+        
                 if color_flag:
                     if  light_flag : 
                         npy_path = os.path.join(current_frame_tensor_dir, 'pos.pt')

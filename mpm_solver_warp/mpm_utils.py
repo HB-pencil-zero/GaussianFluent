@@ -81,13 +81,13 @@ def kirchoff_stress_drucker_prager(
 def kirchoff_stress_neoHookeanBoarden(
     F: wp.mat33, U: wp.mat33, V: wp.mat33, J: float, sig: wp.vec3, mu: float, lam: float, kappa: float, state: MPMStateStruct
 ):
-    # 计算B = F*F^T
+    # Compute B = F*F^T
     B = F * wp.transpose(F)
     
-    # 计算B的迹
+    # Compute trace of B
     B_trace = B[0, 0] + B[1, 1] + B[2, 2]
     
-    # 计算偏差部分 devB = B - I * (1/3) * trace(B)
+    # Compute deviatoric part devB = B - I * (1/3) * trace(B)
     devB_00 = B[0, 0] - B_trace / 3.0
     devB_11 = B[1, 1] - B_trace / 3.0
     devB_22 = B[2, 2] - B_trace / 3.0
@@ -98,7 +98,7 @@ def kirchoff_stress_neoHookeanBoarden(
     devB_20 = B[2, 0]
     devB_21 = B[2, 1]
     
-    # 计算偏差应力 tau_dev = mu * J^(-2/3) * devB
+    # Compute deviatoric stress tau_dev = mu * J^(-2/3) * devB
     scale_dev = mu * J**(-2.0/3.0)
     tau_dev = wp.mat33(
         scale_dev * devB_00, scale_dev * devB_01, scale_dev * devB_02,
@@ -106,7 +106,7 @@ def kirchoff_stress_neoHookeanBoarden(
         scale_dev * devB_20, scale_dev * devB_21, scale_dev * devB_22
     )
     
-    # 计算体积应力 tau_vol = J * prime * I，其中 prime = kappa/2 * (J - 1/J)
+    # Compute volumetric stress tau_vol = J * prime * I, where prime = kappa/2 * (J - 1/J)
     prime = kappa / 2.0 * (J - 1.0/J)
     scale_vol = J * prime
     tau_vol = wp.mat33(
@@ -115,7 +115,7 @@ def kirchoff_stress_neoHookeanBoarden(
         0.0, 0.0, scale_vol
     )
     
-    # 根据J的值选择不同的组合方式
+    # Combine deviatoric and volumetric parts
     tau = tau_dev + tau_vol
     
     return tau
@@ -320,13 +320,13 @@ def NonAssociativeCamClay_return_mapping(
     model: MPMModelStruct,
     p: int
 ):
-    # SVD分解
+    # SVD decomposition
     U = wp.mat33(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     V = wp.mat33(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     sigma = wp.vec3(0.0)
     wp.svd3(F_trial, U, sigma, V)
 
-    # 从state和model读取参数
+    # Read parameters from state and model
     logJp = state.particle_Jp[p]
     mu = model.mu[p]
     kappa = model.kappa[p]
@@ -335,54 +335,54 @@ def NonAssociativeCamClay_return_mapping(
     xi = model.xi
     hardeningOn = model.hardening
 
-    # 防止NaN，设置最小阈值
+    # Prevent NaN with minimum threshold
     threshold = 0.0
     sigma[0] = wp.max(sigma[0], threshold)
     sigma[1] = wp.max(sigma[1], threshold)
     sigma[2] = wp.max(sigma[2], threshold)
 
-    # 计算p0 - 屈服面参数
+    # Compute p0 - yield surface parameter
     p0 = kappa * (0.00001 + wp.sinh(xi * wp.max(-logJp, 0.0)))
 
-    # 计算J和相关量
+    # Compute J and related quantities
     J = sigma[0] * sigma[1] * sigma[2]
 
-    # 计算B_hat_trial
+    # Compute B_hat_trial
     B_hat_trial_0 = sigma[0] * sigma[0]
     B_hat_trial_1 = sigma[1] * sigma[1]
     B_hat_trial_2 = sigma[2] * sigma[2]
 
-    # 计算B_hat_trial的平均值
+    # Compute mean of B_hat_trial
     B_hat_trial_mean = (B_hat_trial_0 + B_hat_trial_1 + B_hat_trial_2) / 3.0
 
-    # 计算偏应力
+    # Compute deviatoric stress
     J_pow = wp.pow(J, -2.0/3.0)
     s_hat_trial_0 = mu * J_pow * (B_hat_trial_0 - B_hat_trial_mean)
     s_hat_trial_1 = mu * J_pow * (B_hat_trial_1 - B_hat_trial_mean)
     s_hat_trial_2 = mu * J_pow * (B_hat_trial_2 - B_hat_trial_mean)
 
-    # 计算压力
+    # Compute pressure
     prime = kappa / 2.0 * (J - 1.0/J)
     p_trial = -prime * J
 
-    # 计算屈服函数y
-    dim = 3.0  # 三维情况
+    # Compute yield function y
+    dim = 3.0
     y_s_half_coeff = (6.0 - dim) / 2.0 * (1.0 + 2.0 * beta)
     y_p_half = M * M * (p_trial + beta * p0) * (p_trial - p0)
 
-    # 计算s_hat_trial的平方和
+    # Compute squared sum of s_hat_trial
     s_hat_trial_sq_sum = s_hat_trial_0 * s_hat_trial_0 + s_hat_trial_1 * s_hat_trial_1 + s_hat_trial_2 * s_hat_trial_2
     y = y_s_half_coeff * s_hat_trial_sq_sum + y_p_half
 
-    # 初始化最终的sigma值为原始值
+    # Initialize final sigma values
     sigma_final_0 = sigma[0]
     sigma_final_1 = sigma[1]
     sigma_final_2 = sigma[2]
 
-    # 更新logJp的初始值
+    # Initialize logJp update
     logJp_new = logJp
 
-    # 投影到顶点：处理p_trial > p0的情况
+    # Project to apex: handle p_trial > p0
     p_min = beta * p0
     if p_trial > p0:
         Je_new = wp.sqrt(-2.0 * p0 / kappa + 1.0)
@@ -390,28 +390,28 @@ def NonAssociativeCamClay_return_mapping(
         sigma_final_1 = sigma_final_0
         sigma_final_2 = sigma_final_0
         
-        # 更新硬化参数
+        # Update hardening parameter
         if hardeningOn > 0.5:
             logJp_new = logJp + wp.log(J / Je_new)
 
-    # 投影到顶点：处理p_trial < -p_min的情况
+    # Project to apex: handle p_trial < -p_min
     elif p_trial < -p_min:
         Je_new = wp.sqrt(2.0 * p_min / kappa + 1.0)
         sigma_final_0 = wp.pow(Je_new, 1.0/3.0)
         sigma_final_1 = sigma_final_0
         sigma_final_2 = sigma_final_0
         
-        # 更新硬化参数
+        # Update hardening parameter
         if hardeningOn > 0.5:
             logJp_new = logJp + wp.log(J / Je_new)
 
-    # 处理屈服面上的点
+    # Handle points on yield surface
     elif y >= 1e-4:
-        # 计算s_hat_trial的范数
+        # Compute norm of s_hat_trial
         s_hat_trial_norm = wp.sqrt(s_hat_trial_sq_sum)
-        s_hat_trial_norm = wp.max(s_hat_trial_norm, 1e-10)  # 避免除以零
+        s_hat_trial_norm = wp.max(s_hat_trial_norm, 1e-10)
         
-        # 计算新的B_hat
+        # Compute new B_hat
         sqrt_factor = wp.sqrt(-y_p_half / y_s_half_coeff)
         J_pow_2 = wp.pow(J, 2.0/3.0)
         scale_factor = J_pow_2 / mu * sqrt_factor / s_hat_trial_norm
@@ -420,31 +420,30 @@ def NonAssociativeCamClay_return_mapping(
         B_hat_new_1 = scale_factor * s_hat_trial_1 + B_hat_trial_mean
         B_hat_new_2 = scale_factor * s_hat_trial_2 + B_hat_trial_mean
         
-        # 计算新的sigma
+        # Compute new sigma
         sigma_final_0 = wp.sqrt(B_hat_new_0)
         sigma_final_1 = wp.sqrt(B_hat_new_1)
         sigma_final_2 = wp.sqrt(B_hat_new_2)
         
-        # 硬化处理
+        # Hardening treatment
         if hardeningOn > 0.5 and p0 > 1e-4 and p_trial < p0 - 1e-4 and p_trial > 1e-4 - p_min:
             p_center = (p0 - p_min) * 0.5
             q_trial = wp.sqrt((6.0 - dim) / 2.0) * s_hat_trial_norm
             
-            # 计算方向向量
+            # Compute direction vector
             direction_p = p_center - p_trial
             direction_q = 0.0 - q_trial
             direction_norm = wp.sqrt(direction_p * direction_p + direction_q * direction_q)
             direction_norm = wp.max(direction_norm, 1e-10)
             direction_p = direction_p / direction_norm
             
-            # 计算二次方程系数
+            # Compute quadratic equation coefficients
             C = M * M * (p_center + beta * p0) * (p_center - p0)
             B = M * M * direction_p * (2.0 * p_center - p0 + beta * p0)
             A = M * M * direction_p * direction_p + (1.0 + 2.0 * beta) * direction_q * direction_q
             
-            # 解二次方程
+            # Solve quadratic equation
             discriminant = B * B - 4.0 * A * C
-            # discriminant = wp.max(discriminant, 0.0)  # 确保判别式非负
             
             l1 = (-B + wp.sqrt(discriminant)) / (2.0 * A)
             l2 = (-B - wp.sqrt(discriminant)) / (2.0 * A)
@@ -452,11 +451,10 @@ def NonAssociativeCamClay_return_mapping(
             p1 = p_center + l1 * direction_p
             p2 = p_center + l2 * direction_p
             
-            # 选择正确的解
+            # Select correct solution
             diff_trial = p_trial - p_center
             diff1 = p1 - p_center
             
-            # 计算条件：(p_trial - p_center) * (p1 - p_center) > 0
             if diff_trial * diff1 > 0.0:
                 p_fake = p1
             else:
@@ -464,21 +462,21 @@ def NonAssociativeCamClay_return_mapping(
             
             Je_new_fake = wp.sqrt(wp.abs(-2.0 * p_fake / kappa + 1.0))
             
-            # 更新硬化参数
+            # Update hardening parameter
             if Je_new_fake > 1e-4  and hardeningOn > 0.5:
                 logJp_new = logJp + wp.log(J / Je_new_fake)
 
-    # 更新state中的塑性参数
+    # Update plastic parameter in state
     state.particle_Jp[p] = logJp_new
 
-    # 构建对角矩阵
+    # Build diagonal matrix
     sigma_diag = wp.mat33(
         sigma_final_0, 0.0, 0.0,
         0.0, sigma_final_1, 0.0,
         0.0, 0.0, sigma_final_2
     )
     
-    # 计算新的F
+    # Compute new F
     F_new = U * sigma_diag * wp.transpose(V)
     return F_new
 
@@ -651,6 +649,8 @@ def grid_normalization_and_gravity(
         state.grid_v_out[grid_x, grid_y, grid_z] = v_out
 
 
+
+
 @wp.kernel
 def g2p(state: MPMStateStruct, model: MPMModelStruct, dt: float):
     p = wp.tid()
@@ -742,7 +742,7 @@ def g2p_flip(state: MPMStateStruct, model: MPMModelStruct, dt: float , flip_pic_
                     new_F = new_F + wp.outer(grid_v, dweight)
 
         state.particle_v[p] = state.particle_v[p] * flip_pic_ratio
-        state.particle_v[p] = state.particle_v[p] + new_v - flip_pic_ratio * old_v  # flip_pic_ratio 为 0.99 
+        state.particle_v[p] = state.particle_v[p] + new_v - flip_pic_ratio * old_v
         state.particle_x[p] = state.particle_x[p] + dt * new_v
         I33 = wp.mat33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
         F_tmp = (I33 + new_F * dt) * state.particle_F[p]

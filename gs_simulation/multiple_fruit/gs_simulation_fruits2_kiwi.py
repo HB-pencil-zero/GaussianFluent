@@ -534,8 +534,13 @@ if __name__ == "__main__":
     frame_sum = 0
     frame_num = 0 
     select_id__= []
-    select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, y_greater=True, y_threshold=1.1, z_greater=False, z_threshold=1.0)[1] )
-    select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=1.02, z_greater=False, z_threshold=1.0)[1] )
+    # select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, y_greater=True, y_threshold=1.1, z_greater=False, z_threshold=1.0)[1] )
+    # select_id__.append(filter_gaussian_points_by_xyz(tensor = mpm_init_pos, x_greater=True, x_threshold=1.02, z_greater=False, z_threshold=1.0)[1] )
+
+    select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([1.0, 0, -0.3]), plane_b=0.17, plane_greater=True)[1] )
+    select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([1.0, 0, -0.3]), plane_b=0.12, plane_greater=True)[1] )
+    select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([1.0, 0, -0.3]), plane_b=0.05, plane_greater=True)[1] )
+    select_id__.append(filter_gaussian_points_by_plane(tensor = mpm_init_pos, plane_w=torch.tensor([1.0, 0, -0.3]), plane_b=-0.5, plane_greater=True)[1] )
 
     mpm_init_pos[:, 2] += 0.3
     for k in range(len(biases)):
@@ -547,11 +552,11 @@ if __name__ == "__main__":
         bias = biases[k]
         frame_sum += frame_num
         frame_num = frames[k]
-        _ , select_id__ = filter_tensor_by_hyperplanes_delta(mpm_init_pos, [(torch.tensor([x_tag, y_tag, 0.0]), base_bias + bias)] , cov=mpm_init_cov, pos=[pos_flag], cal_bias=cal_bias, delta=0.03)
-        select_id = torch.concat([select_id, select_id__])
+        # _ , select_id__ = filter_tensor_by_hyperplanes_delta(mpm_init_pos, [(torch.tensor([x_tag, y_tag, 0.0]), base_bias + bias)] , cov=mpm_init_cov, pos=[pos_flag], cal_bias=cal_bias, delta=0.03)
+        # select_id = torch.concat([select_id, select_id__])
         
         
-        # select_id = torch.concat([select_id, select_id__[k]])
+        select_id = torch.concat([select_id, select_id__[k]])
         select_id = torch.unique(select_id)
 
 
@@ -862,6 +867,7 @@ if __name__ == "__main__":
                 opacity_ = torch.concat([opacity , opacity2],dim =0 )
                 shs_ = torch.concat([shs, shs2],dim =0 )                   
                 
+                
                 # save_prop_dict('gs_simulation/multiple_fruit/save_tensor/kiwi.pt', pos_, cov3D_, rot_, opacity_, shs_ )
                 pos_ = torch.concat([pos_, combined_scene_tensors['pos']],dim =0 )
                 cov3D_ = torch.concat([cov3D_, combined_scene_tensors['cov']],dim =0 )
@@ -893,9 +899,6 @@ if __name__ == "__main__":
                 )
                 
 
-
-                # Tensors to save for the current frame.
-                # Ensure these variables hold the correct data for the *current frame* at this point.
  
                 cv2_img = rendering.permute(1, 2, 0).detach().cpu().numpy()
                 cv2_img = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
@@ -1006,14 +1009,7 @@ if __name__ == "__main__":
                         "shs.pt": shs,  # This should be the SH coefficients (e.g., from gaussians.get_features() or the 'shs' used in convert_SH)
                         "opacity.pt": opacity # This should be the opacity data (e.g., from gaussians.get_opacity() or the 'opacity' used in rasterize)
                     }
-
-                    # for filename, tensor_data in tensors_to_save.items():
-                    #     if tensor_data is not None:
-                    #         save_path = os.path.join(current_frame_tensor_dir, filename)
-                    #         # Detach from computation graph and move to CPU before saving (good practice)
-                    #         torch.save(tensor_data.detach().cpu(), save_path)
-                    #     else:
-                    #         print(f"Warning: Tensor for {filename} in frame {frame} is None. Skipping save.")    
+   
                             
                     
                     cv2_img = rendering.permute(1, 2, 0).detach().cpu().numpy()

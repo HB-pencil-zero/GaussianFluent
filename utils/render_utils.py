@@ -498,3 +498,358 @@ def filter_points_verbose(pos2: torch.Tensor, thresold: float = 30 ) -> torch.Te
 #     return output_colors
 
 
+
+
+def filter_gaussian_points_by_plane(tensor,
+                                    plane_w,
+                                    plane_b=0.0,
+                                    plane_greater=True,
+                                    cov=None,
+                                    cal_bias=False,
+                                    delta=0.02):
+    """
+    沿任意自定义平面 w·x = b 切割，返回上半部分 (w·x > b) 或下半部分 (w·x < b) 的点。
+
+    参数:
+        tensor (torch.Tensor): [n, 3]，每行一个 3D 点。
+        plane_w (array-like | torch.Tensor): 平面法向量 w，形状为 (3,)。
+        plane_b (float): 平面偏置 b，使平面满足 w·x = b。
+        plane_greater (bool): True 取上半部分 (w·x > b)，False 取下半部分 (w·x < b)。
+        cov (torch.Tensor or None): 若提供则形状为 [n, 6]，为各点的协方差上三角 (xx, xy, xz, yy, yz, zz)。
+        cal_bias (bool): 是否进行基于协方差的偏置矫正。
+        delta (float): 当 cal_bias 且提供 cov 时，对阈值进行 +/- delta 的边界放宽。
+
+    返回:
+        torch.Tensor: 筛选后的点（原始坐标）。
+        torch.Tensor: 保留下来的点的索引。
+        torch.Tensor: 被排除的点的索引。
+    """
+    if tensor.shape[1] != 3:
+        raise ValueError("Input tensor must have shape (n, 3)")
+
+    if isinstance(plane_w, (list, tuple, np.ndarray)):
+        w = torch.tensor(plane_w, device=tensor.device, dtype=tensor.dtype)
+    elif isinstance(plane_w, torch.Tensor):
+        w = plane_w.to(device=tensor.device, dtype=tensor.dtype)
+    else:
+        raise TypeError("plane_w must be a list/tuple/ndarray/torch.Tensor of shape (3,)")
+
+    if w.numel() != 3:
+        raise ValueError("plane_w must have 3 elements")
+    b = torch.as_tensor(plane_b, device=tensor.device, dtype=tensor.dtype)
+
+    adjusted_tensor = tensor  - torch.tensor([1.0, 1.0, 1.0], device=tensor.device, dtype=tensor.dtype)
+
+    # 协方差偏置矫正: x' = x - Sigma w / sqrt(w^T Sigma w)
+    if cov is not None and cal_bias:
+        if cov.shape[0] != tensor.shape[0] or cov.shape[1] != 6:
+            raise ValueError("Covariance must have shape (n, 6) matching tensor.shape[0]")
+        n = cov.shape[0]
+        Sigma = torch.zeros((n, 3, 3), device=tensor.device, dtype=tensor.dtype)
+        Sigma[:, 0, 0] = cov[:, 0]
+        Sigma[:, 0, 1] = cov[:, 1]
+        Sigma[:, 0, 2] = cov[:, 2]
+        Sigma[:, 1, 0] = cov[:, 1]
+        Sigma[:, 1, 1] = cov[:, 3]
+        Sigma[:, 1, 2] = cov[:, 4]
+        Sigma[:, 2, 0] = cov[:, 2]
+        Sigma[:, 2, 1] = cov[:, 4]
+        Sigma[:, 2, 2] = cov[:, 5]
+
+        Sigma_w = torch.matmul(Sigma, w.view(3, 1)).squeeze(-1)  # [n, 3]
+        wT_Sigma_w = torch.matmul(Sigma_w, w)  # [n]
+
+        bias = torch.zeros_like(tensor)
+        valid = wT_Sigma_w > 1e-8
+        if torch.any(valid):
+            bias_valid = Sigma_w[valid] / torch.sqrt(wT_Sigma_w[valid]).unsqueeze(-1)
+            bias[valid] = bias_valid
+        adjusted_tensor = tensor - bias
+
+    # delta 放宽（与 xyz 函数保持一致，仅在 cal_bias 且提供 cov 时生效）
+    current_delta = delta if (cal_bias and cov is not None) else 0.0
+    wx = torch.matmul(adjusted_tensor, w)
+
+    if plane_greater:
+        keep_mask = wx > (b - current_delta)
+    else:
+        keep_mask = wx < (b + current_delta)
+
+    keep_idx = torch.nonzero(keep_mask, as_tuple=False).squeeze(-1)
+    drop_idx = torch.nonzero(~keep_mask, as_tuple=False).squeeze(-1)
+    return tensor[keep_idx], keep_idx, drop_idx
+
+
+def filter_gaussian_points_by_sphere(tensor,
+                                     sphere_center,
+                                     sphere_radius,
+                                     sphere_greater=True,
+                                     cov=None,
+                                     cal_bias=False,
+                                     delta=0.02):
+    """
+    沿球形截面切割，返回球外部分 (|x-c| > r) 或球内部分 (|x-c| < r) 的点。
+
+    参数:
+        tensor (torch.Tensor): [n, 3]，每行一个 3D 点。
+        sphere_center (array-like | torch.Tensor): 球心坐标 c，形状为 (3,)。
+        sphere_radius (float): 球半径 r。
+        sphere_greater (bool): True 取球外部分 (|x-c| > r)，False 取球内部分 (|x-c| < r)。
+        cov (torch.Tensor or None): 若提供则形状为 [n, 6]，为各点的协方差上三角 (xx, xy, xz, yy, yz, zz)。
+        cal_bias (bool): 是否进行基于协方差的偏置矫正。
+        delta (float): 当 cal_bias 且提供 cov 时，对阈值进行 +/- delta 的边界放宽。
+
+    返回:
+        torch.Tensor: 筛选后的点（原始坐标）。
+        torch.Tensor: 保留下来的点的索引。
+        torch.Tensor: 被排除的点的索引。
+    """
+    if tensor.shape[1] != 3:
+        raise ValueError("Input tensor must have shape (n, 3)")
+
+    if isinstance(sphere_center, (list, tuple, np.ndarray)):
+        c = torch.tensor(sphere_center, device=tensor.device, dtype=tensor.dtype)
+    elif isinstance(sphere_center, torch.Tensor):
+        c = sphere_center.to(device=tensor.device, dtype=tensor.dtype)
+    else:
+        raise TypeError("sphere_center must be a list/tuple/ndarray/torch.Tensor of shape (3,)")
+
+    if c.numel() != 3:
+        raise ValueError("sphere_center must have 3 elements")
+    
+    r = torch.as_tensor(sphere_radius, device=tensor.device, dtype=tensor.dtype)
+
+    # 计算点到球心的距离
+    adjusted_tensor = tensor - c
+    distances = torch.norm(adjusted_tensor, dim=1)  # [n]
+
+    # 协方差偏置矫正: 对于球形截面，我们需要考虑径向方向的协方差
+    if cov is not None and cal_bias:
+        if cov.shape[0] != tensor.shape[0] or cov.shape[1] != 6:
+            raise ValueError("Covariance must have shape (n, 6) matching tensor.shape[0]")
+        
+        n = cov.shape[0]
+        Sigma = torch.zeros((n, 3, 3), device=tensor.device, dtype=tensor.dtype)
+        Sigma[:, 0, 0] = cov[:, 0]
+        Sigma[:, 0, 1] = cov[:, 1]
+        Sigma[:, 0, 2] = cov[:, 2]
+        Sigma[:, 1, 0] = cov[:, 1]
+        Sigma[:, 1, 1] = cov[:, 3]
+        Sigma[:, 1, 2] = cov[:, 4]
+        Sigma[:, 2, 0] = cov[:, 2]
+        Sigma[:, 2, 1] = cov[:, 4]
+        Sigma[:, 2, 2] = cov[:, 5]
+
+        # 计算径向方向的单位向量
+        radial_dirs = adjusted_tensor / (distances.unsqueeze(-1) + 1e-8)  # [n, 3]
+        
+        # 计算径向方向的协方差: radial_dir^T @ Sigma @ radial_dir
+        Sigma_radial = torch.matmul(Sigma, radial_dirs.unsqueeze(-1)).squeeze(-1)  # [n, 3]
+        radial_var = torch.sum(radial_dirs * Sigma_radial, dim=1)  # [n]
+
+        # 计算偏置调整
+        bias = torch.zeros_like(tensor)
+        valid = radial_var > 1e-8
+        if torch.any(valid):
+            bias_valid = Sigma_radial[valid] / torch.sqrt(radial_var[valid]).unsqueeze(-1)
+            bias[valid] = bias_valid
+        
+        # 应用偏置调整
+        adjusted_tensor = adjusted_tensor - bias
+        distances = torch.norm(adjusted_tensor, dim=1)  # 重新计算距离
+
+    # delta 放宽（与 xyz 函数保持一致，仅在 cal_bias 且提供 cov 时生效）
+    current_delta = delta if (cal_bias and cov is not None) else 0.0
+
+    if sphere_greater:
+        # 取球外部分: |x-c| > r
+        keep_mask = distances > (r - current_delta)
+    else:
+        # 取球内部分: |x-c| < r
+        keep_mask = distances < (r + current_delta)
+
+    keep_idx = torch.nonzero(keep_mask, as_tuple=False).squeeze(-1)
+    drop_idx = torch.nonzero(~keep_mask, as_tuple=False).squeeze(-1)
+    
+    return tensor[keep_idx], keep_idx, drop_idx
+
+
+def filter_gaussian_points_by_ellipsoid(tensor,
+                                        ellipsoid_center,
+                                        ellipsoid_axes,
+                                        ellipsoid_greater=True,
+                                        cov=None,
+                                        cal_bias=False,
+                                        delta=0.02):
+    """
+    沿椭球形截面切割，返回椭球外部分或椭球内部分的点。
+
+    参数:
+        tensor (torch.Tensor): [n, 3]，每行一个 3D 点。
+        ellipsoid_center (array-like | torch.Tensor): 椭球心坐标，形状为 (3,)。
+        ellipsoid_axes (array-like | torch.Tensor): 椭球三个轴的长度 [a, b, c]，形状为 (3,)。
+        ellipsoid_greater (bool): True 取椭球外部分，False 取椭球内部分。
+        cov (torch.Tensor or None): 若提供则形状为 [n, 6]，为各点的协方差上三角。
+        cal_bias (bool): 是否进行基于协方差的偏置矫正。
+        delta (float): 当 cal_bias 且提供 cov 时，对阈值进行 +/- delta 的边界放宽。
+
+    返回:
+        torch.Tensor: 筛选后的点（原始坐标）。
+        torch.Tensor: 保留下来的点的索引。
+        torch.Tensor: 被排除的点的索引。
+    """
+    if tensor.shape[1] != 3:
+        raise ValueError("Input tensor must have shape (n, 3)")
+
+    if isinstance(ellipsoid_center, (list, tuple, np.ndarray)):
+        c = torch.tensor(ellipsoid_center, device=tensor.device, dtype=tensor.dtype)
+    elif isinstance(ellipsoid_center, torch.Tensor):
+        c = ellipsoid_center.to(device=tensor.device, dtype=tensor.dtype)
+    else:
+        raise TypeError("ellipsoid_center must be a list/tuple/ndarray/torch.Tensor of shape (3,)")
+
+    if isinstance(ellipsoid_axes, (list, tuple, np.ndarray)):
+        axes = torch.tensor(ellipsoid_axes, device=tensor.device, dtype=tensor.dtype)
+    elif isinstance(ellipsoid_axes, torch.Tensor):
+        axes = ellipsoid_axes.to(device=tensor.device, dtype=tensor.dtype)
+    else:
+        raise TypeError("ellipsoid_axes must be a list/tuple/ndarray/torch.Tensor of shape (3,)")
+
+    if c.numel() != 3 or axes.numel() != 3:
+        raise ValueError("ellipsoid_center and ellipsoid_axes must have 3 elements each")
+
+    # 计算标准化坐标: (x-c)/a, (y-c)/b, (z-c)/z
+    tensor = tensor - torch.tensor([1.0, 1.0, 1.0], device=tensor.device, dtype=tensor.dtype)
+    adjusted_tensor = tensor - c
+    normalized_coords = adjusted_tensor / (axes.unsqueeze(0) + 1e-8)  # [n, 3]
+    
+    # 计算椭球函数值: (x/a)^2 + (y/b)^2 + (z/c)^2
+    ellipsoid_values = torch.sum(normalized_coords ** 2, dim=1)  # [n]
+
+    # 协方差偏置矫正
+    if cov is not None and cal_bias:
+        if cov.shape[0] != tensor.shape[0] or cov.shape[1] != 6:
+            raise ValueError("Covariance must have shape (n, 6) matching tensor.shape[0]")
+        
+        n = cov.shape[0]
+        Sigma = torch.zeros((n, 3, 3), device=tensor.device, dtype=tensor.dtype)
+        Sigma[:, 0, 0] = cov[:, 0]
+        Sigma[:, 0, 1] = cov[:, 1]
+        Sigma[:, 0, 2] = cov[:, 2]
+        Sigma[:, 1, 0] = cov[:, 1]
+        Sigma[:, 1, 1] = cov[:, 3]
+        Sigma[:, 1, 2] = cov[:, 4]
+        Sigma[:, 2, 0] = cov[:, 2]
+        Sigma[:, 2, 1] = cov[:, 4]
+        Sigma[:, 2, 2] = cov[:, 5]
+
+        # 计算椭球法向量方向的协方差
+        # 椭球法向量: [2x/a^2, 2y/b^2, 2z/c^2]
+        normal_dirs = 2.0 * normalized_coords / (axes.unsqueeze(0) + 1e-8)  # [n, 3]
+        
+        # 归一化法向量
+        normal_norms = torch.norm(normal_dirs, dim=1, keepdim=True)  # [n, 1]
+        normal_dirs = normal_dirs / (normal_norms + 1e-8)  # [n, 3]
+        
+        # 计算法向量方向的协方差
+        Sigma_normal = torch.matmul(Sigma, normal_dirs.unsqueeze(-1)).squeeze(-1)  # [n, 3]
+        normal_var = torch.sum(normal_dirs * Sigma_normal, dim=1)  # [n]
+
+        # 计算偏置调整
+        bias = torch.zeros_like(tensor)
+        valid = normal_var > 1e-8
+        if torch.any(valid):
+            bias_valid = Sigma_normal[valid] / torch.sqrt(normal_var[valid]).unsqueeze(-1)
+            bias[valid] = bias_valid
+        
+        # 应用偏置调整
+        adjusted_tensor = adjusted_tensor - bias
+        normalized_coords = adjusted_tensor / (axes.unsqueeze(0) + 1e-8)
+        ellipsoid_values = torch.sum(normalized_coords ** 2, dim=1)
+
+    # delta 放宽
+    current_delta = delta if (cal_bias and cov is not None) else 0.0
+
+    if ellipsoid_greater:
+        # 取椭球外部分: (x/a)^2 + (y/b)^2 + (z/c)^2 > 1
+        keep_mask = ellipsoid_values > (1.0 - current_delta)
+    else:
+        # 取椭球内部分: (x/a)^2 + (y/b)^2 + (z/c)^2 < 1
+        keep_mask = ellipsoid_values < (1.0 + current_delta)
+
+    keep_idx = torch.nonzero(keep_mask, as_tuple=False).squeeze(-1)
+    drop_idx = torch.nonzero(~keep_mask, as_tuple=False).squeeze(-1)
+    
+    return tensor[keep_idx], keep_idx, drop_idx
+
+
+def filter_tensor_by_hyperplanes_delta(tensor, hyperplanes=None,  pos=None, cov=None, cal_bias=True, delta=0.01 ):
+    """
+    筛选位于超平面正负delta范围内的点，通过检查点是否满足 b-delta < wx < b+delta。
+
+    参数:
+        tensor (torch.Tensor): 输入的 n,3 形状的 Tensor,其中每行是一个 3D 点。
+        delta (float): 超平面偏置的调整量，筛选满足 b-delta < wx < b+delta 的点。
+        hyperplanes (list[tuple] or None): 每个超平面由 (w, b) 组成，w 是形状为 (3,) 的法向量，b 是偏置。
+                                        默认值为 [(torch.tensor([1.0, 0.0, 0.0]), 0.0)]。
+        cov (torch.Tensor or None): 如果提供，将对点进行基于协方差矩阵的调整。
+        cal_bias (bool): 是否计算并应用协方差偏置调整。
+
+    返回:
+        torch.Tensor: 筛选后的点 Tensor。
+        torch.Tensor: 保留下来的点的索引。
+    """
+    if tensor.shape[1] != 3:
+        raise ValueError("Input tensor must have shape (n, 3)")
+
+    # 设置默认值
+    if hyperplanes is None:
+        hyperplanes = [(torch.tensor([1.0, 0.0, 0.0]), 0.0)]
+
+    # 初始化所有点均为有效
+    valid_indices = torch.ones(tensor.shape[0], dtype=torch.bool, device=tensor.device)
+
+    for w, b in hyperplanes:
+        w = w.to(tensor.device, dtype=tensor.dtype)
+        b = torch.tensor(b, device=tensor.device, dtype=tensor.dtype)
+
+        tensor_adjusted = tensor
+
+        if cov is not None and cal_bias:
+            batch_size = cov.shape[0]
+            Sigma = torch.zeros((batch_size, 3, 3), device=tensor.device)
+
+            # 填充下三角部分
+            Sigma[:, 0, 0] = cov[:, 0]  # Σ_00
+            Sigma[:, 0, 1] = cov[:, 1]  # Σ_01
+            Sigma[:, 0, 2] = cov[:, 2]  # Σ_02
+            Sigma[:, 1, 0] = cov[:, 1]  # Σ_10 = Σ_01
+            Sigma[:, 1, 1] = cov[:, 3]  # Σ_11
+            Sigma[:, 1, 2] = cov[:, 4]  # Σ_12
+            Sigma[:, 2, 0] = cov[:, 2]  # Σ_20 = Σ_02
+            Sigma[:, 2, 1] = cov[:, 4]  # Σ_21 = Σ_12
+            Sigma[:, 2, 2] = cov[:, 5]  # Σ_22
+
+            # 计算 Σ @ w
+            Sigma_w = Sigma @ w.unsqueeze(-1)  # 形状为 [n, 3, 1]
+            Sigma_w = Sigma_w.squeeze(-1)  # 形状为 [n, 3]
+
+            # 计算 w^T @ Σ @ w
+            wT_Sigma_w = (w.unsqueeze(0) @ Sigma @ w.unsqueeze(-1)).squeeze(-1).squeeze(-1)  # 标量
+            bias = Sigma_w / torch.sqrt(wT_Sigma_w).unsqueeze(-1)
+            tensor_adjusted = tensor - bias  # 应用偏置调整
+
+        # 计算超平面条件 wx
+        hyperplane_values = torch.matmul(tensor_adjusted, w)
+
+        # 筛选满足 b-delta < wx < b+delta 的点
+        valid_indices &= (hyperplane_values > (b - delta)) & (hyperplane_values < (b + delta))
+
+    # 获取满足条件的原始索引
+    valid_indices_positions = torch.nonzero(valid_indices, as_tuple=True)[0]
+
+    # 返回筛选后的点和它们的索引
+    return tensor[valid_indices_positions], valid_indices_positions
+ 
+    
+
