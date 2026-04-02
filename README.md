@@ -68,4 +68,4 @@ By default, We use pytorch=2.0.1+cu117.
 ```
 
 ## Acknowledgement
-This codebase is built upon [PhysGaussian](https://github.com/XPandora/PhysGaussian). We thank the authors for their excellent work.
+This codebase is built upon [PhysGaussian](https://github.com/XPandora/PhysGaussian). The CD-MPM implementation is inspired by the reference code of [ziran2019](https://github.com/penn-graphics-research/ziran2019). We thank the authors for their excellent work.
