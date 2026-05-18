@@ -1,11 +1,12 @@
 # GaussianFluent: Gaussian Simulation for Dynamic Scenes with Mixed Materials
 
 ### [[arXiv](https://arxiv.org/abs/2601.09265)] [CVPR 2026]
+### [[Project Page](https://hb-pencil-zero.github.io/GaussianFluent/)]
 
 Bei Huang<sup>1</sup>, Yixin Chen<sup>1</sup>, Ruijie Lu<sup>1</sup>, Gang Zeng<sup>1</sup>, Hongbin Zha<sup>1</sup>, Yuru Pei<sup>1</sup>, Siyuan Huang<sup>2</sup><br>
 <sup>1</sup>Peking University, <sup>2</sup>Beijing Institute for General Artificial Intelligence<br>
 
-![teaser-1.png](static/images/teaser-1.png)
+![GaussianFluent teaser](static/images/teaser.jpg)
 
 Abstract: *3D Gaussian Splatting (3DGS) has emerged as a prominent 3D representation for high-fidelity and real-time rendering. Prior work has coupled physics simulation with Gaussians, but predominantly targets soft, deformable materials, leaving brittle fracture largely unresolved. This stems from two key obstacles: the lack of volumetric interiors with coherent textures in GS representation, and the absence of fracture-aware simulation methods for Gaussians. To address these challenges, we introduce GaussianFluent, a unified framework for realistic simulation and rendering of dynamic object states. First, it synthesizes photorealistic interiors by densifying internal Gaussians guided by generative models. Second, it integrates an optimized Continuum Damage Material Point Method (CD-MPM) to enable brittle fracture simulation at remarkably high speed. Our approach handles complex scenarios including mixed-material objects and multi-stage fracture propagation, achieving results infeasible with previous methods. Experiments clearly demonstrate GaussianFluent's capability for photo-realistic, real-time rendering with structurally consistent interiors, highlighting its potential for downstream application, such as VR and Robotics.*
 
@@ -35,7 +36,7 @@ pip install -e gaussian-splatting/submodules/simple-knn/
 By default, We use pytorch=2.0.1+cu117.
 
 ### Quick Start
-1. **Download Pretrained Models**: 
+1. **Download Pretrained Models**:
    Download the Gaussian Splatting models from our [Hugging Face Repository](https://huggingface.co/hbpencil01/GaussianFluent/tree/main).
    Place the downloaded `model/` folder into the root directory of this project:
    ```shell
@@ -60,7 +61,7 @@ By default, We use pytorch=2.0.1+cu117.
 
 ```
 @article{huang2026gaussianfluent,
-      title={GaussianFluent: Gaussian Simulation for Dynamic Scenes with Mixed Materials}, 
+      title={GaussianFluent: Gaussian Simulation for Dynamic Scenes with Mixed Materials},
       author={Huang, Bei and Chen, Yixin and Lu, Ruijie and Zeng, Gang and Zha, Hongbin and Pei, Yuru and Huang, Siyuan},
       journal={arXiv preprint arXiv:2601.09265},
       year={2026},
