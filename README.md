@@ -3,8 +3,10 @@
 ### [[arXiv](https://arxiv.org/abs/2601.09265)] [CVPR 2026]
 ### [[Project Page](https://hb-pencil-zero.github.io/GaussianFluent/)]
 
-Bei Huang<sup>1</sup>, Yixin Chen<sup>1</sup>, Ruijie Lu<sup>1</sup>, Gang Zeng<sup>1</sup>, Hongbin Zha<sup>1</sup>, Yuru Pei<sup>1</sup>, Siyuan Huang<sup>2</sup><br>
-<sup>1</sup>Peking University, <sup>2</sup>Beijing Institute for General Artificial Intelligence<br>
+Bei Huang<sup>1,2*</sup>, Yixin Chen<sup>2*&dagger;</sup>, Ruijie Lu<sup>1,2</sup>, Gang Zeng<sup>1</sup>, Hongbin Zha<sup>1</sup>, Yuru Pei<sup>1&dagger;</sup>, Siyuan Huang<sup>2&dagger;</sup><br>
+<sup>*</sup> Equal contribution, <sup>&dagger;</sup> Corresponding authors<br>
+<sup>1</sup>State Key Laboratory of General Artificial Intelligence, Peking University<br>
+<sup>2</sup>State Key Laboratory of General Artificial Intelligence, BIGAI<br>
 
 ![GaussianFluent teaser](static/images/teaser.jpg)
 
