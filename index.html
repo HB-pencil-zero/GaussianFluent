@@ -4,11 +4,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="description"
-    content="Deformable Neural Radiance Fields creates free-viewpoint portraits (nerfies) from casually captured videos.">
-  <meta name="keywords" content="Nerfies, D-NeRF, NeRF">
+    content="GaussianFluent: Gaussian Simulation for Dynamic Scenes with Mixed Materials.">
+  <meta name="keywords" content="GaussianFluent, Gaussian Splatting, Physics Simulation, Mixed Materials">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GaussianFluent: Explicit Gaussian Simulation for Dynamic Object States
-    with Mixed Materials</title>
+  <title>GaussianFluent: Gaussian Simulation for Dynamic Scenes with Mixed Materials</title>
 
   <!-- Global site tag (gtag.js) - Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-PYVRSFMDRL"></script>
@@ -43,18 +42,351 @@
   <script src="static/js/index.js"></script>
   <script src="static/js/video_comparison.js"></script>
   <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #5e6872;
+      --line: #dce4ea;
+      --paper: #ffffff;
+      --wash: #f4f7f8;
+      --accent: #1e7d74;
+      --accent-strong: #135f58;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--wash);
+      color: var(--ink);
+      font-size: 17px;
+      line-height: 1.72;
+      text-rendering: optimizeLegibility;
+    }
+
+    .container.is-max-desktop {
+      max-width: 1040px !important;
+    }
+
+    .publication-hero {
+      background: var(--paper);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .publication-hero .hero-body {
+      padding: 4.25rem 1.5rem 3.2rem;
+    }
+
+    .publication-title {
+      color: var(--ink);
+      font-size: clamp(2.2rem, 5vw, 4.45rem) !important;
+      font-weight: 800;
+      letter-spacing: 0;
+      line-height: 1.04;
+      margin: 0 auto 1.35rem;
+      max-width: 1120px;
+    }
+
+    .publication-authors {
+      color: var(--ink);
+      font-size: 1.15rem;
+      line-height: 1.75;
+      margin-bottom: 0.85rem;
+    }
+
+    .publication-authors .author-block {
+      margin: 0 0.18rem;
+      white-space: nowrap;
+    }
+
+    .publication-affiliations,
+    .publication-notes,
+    .publication-venue {
+      color: var(--muted);
+      font-family: 'Google Sans', sans-serif;
+      font-size: 0.98rem;
+      line-height: 1.55;
+      margin: 0.25rem auto;
+      max-width: 920px;
+    }
+
+    .publication-venue {
+      color: var(--accent-strong);
+      font-weight: 700;
+      margin-top: 0.75rem;
+      width: auto;
+    }
+
+    .publication-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      justify-content: center;
+      margin-top: 1.55rem;
+    }
+
+    .publication-links .button {
+      background: #17212b;
+      border: 1px solid #17212b;
+      border-radius: 999px;
+      color: #fff;
+      font-family: 'Google Sans', sans-serif;
+      font-weight: 700;
+      padding-left: 1rem;
+      padding-right: 1rem;
+      transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+    }
+
+    .publication-links .button:hover,
+    .publication-links .button:focus {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    .publication-links .icon {
+      margin-right: 0.35rem;
+    }
+
+    .teaser {
+      background: var(--paper);
+      border-bottom: 1px solid var(--line);
+      font-family: 'Google Sans', sans-serif;
+    }
+
+    .teaser .hero-body {
+      padding: 0 1.5rem 3.75rem;
+    }
+
+    .interpolation-image,
+    video,
+    .publication-video {
+      border: 1px solid rgba(23, 33, 43, 0.12);
+      border-radius: 8px !important;
+      box-shadow: 0 18px 45px rgba(23, 33, 43, 0.11);
+      overflow: hidden;
+    }
+
+    .interpolation-image,
+    video {
+      background: #111820;
+      display: block;
+      height: auto;
+      width: 100%;
+    }
+
+    .results-band {
+      background: var(--paper) !important;
+      border-bottom: 1px solid var(--line);
+      border-top: 1px solid var(--line);
+    }
+
+    .results-band .hero-body {
+      padding: 2.25rem 1.5rem 3rem;
+    }
+
+    .results-carousel {
+      margin: 0 auto;
+      max-width: 1220px;
+      overflow: hidden;
+    }
+
+    .results-carousel .item {
+      background: var(--paper);
+      border: 1px solid rgba(23, 33, 43, 0.12);
+      border-radius: 8px;
+      box-shadow: 0 18px 40px rgba(23, 33, 43, 0.1);
+      font-size: 0;
+      margin: 0.65rem;
+      overflow: hidden;
+    }
+
+    .results-carousel video {
+      border: 0;
+      border-radius: 0 !important;
+      box-shadow: none;
+    }
+
+    .results-carousel .slider-navigation-previous,
+    .results-carousel .slider-navigation-next {
+      box-shadow: 0 10px 24px rgba(23, 33, 43, 0.16);
+    }
+
+    .section {
+      background: var(--paper);
+      padding: 5rem 1.5rem;
+    }
+
+    .section:nth-of-type(even) {
+      background: var(--wash);
+    }
+
+    .section + .section {
+      border-top: 1px solid var(--line);
+    }
+
+    .section .title.is-3 {
+      color: var(--ink);
+      font-size: clamp(1.7rem, 3vw, 2.35rem);
+      font-weight: 780;
+      letter-spacing: 0;
+      line-height: 1.16;
+      margin-bottom: 1.1rem;
+      padding-left: 1rem;
+      position: relative;
+    }
+
+    .section .title.is-3::before {
+      background: var(--accent);
+      border-radius: 999px;
+      bottom: 0.18em;
+      content: "";
+      left: 0;
+      position: absolute;
+      top: 0.18em;
+      width: 4px;
+    }
+
+    .content p,
+    .section p {
+      color: var(--muted);
+      font-size: 1.04rem;
+      line-height: 1.78;
+      margin-bottom: 1.15rem;
+    }
+
+    .content strong,
+    .dnerf {
+      color: var(--accent);
+    }
+
+    .publication-video {
+      background: #111820;
+      margin-top: 2.5rem;
+    }
+
+    .publication-video video {
+      border: 0;
+      border-radius: 0 !important;
+      box-shadow: none;
+      height: 100%;
+      inset: 0;
+      object-fit: contain;
+      position: absolute;
+      width: 100%;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 1.05rem;
+      line-height: 1.55;
+      margin-top: 1.35rem !important;
+    }
+
+    .columns.is-centered {
+      align-items: stretch;
+      gap: 1.25rem;
+    }
+
+    .column .content {
+      height: 100%;
+    }
+
+    .column .content .title.is-size-5 {
+      color: var(--ink);
+      font-weight: 700;
+      letter-spacing: 0;
+      margin-bottom: 0.85rem;
+    }
+
+    .video-compare-container {
+      border-radius: 8px;
+      box-shadow: 0 18px 45px rgba(23, 33, 43, 0.11);
+      overflow: hidden;
+    }
+
+    .video-compare-container video {
+      border: 0;
+      border-radius: 0 !important;
+      box-shadow: none;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        font-size: 16px;
+      }
+
+      .publication-hero .hero-body {
+        padding: 3rem 1rem 2.4rem;
+      }
+
+      .publication-authors .author-block {
+        white-space: normal;
+      }
+
+      .teaser .hero-body,
+      .results-band .hero-body,
+      .section {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+
+      .section {
+        padding-top: 3.25rem;
+        padding-bottom: 3.25rem;
+      }
+
+      .columns.is-centered {
+        gap: 0;
+      }
+    }
+  </style>
 </head>
 
 <body>
-  <section class="hero">
+  <section class="hero publication-hero">
     <div class="hero-body">
       <div class="container is-max-desktop">
         <div class="columns is-centered">
           <div class="column has-text-centered">
-            <h1 class="title is-1 publication-title">GaussianFluent: Explicit Gaussian Simulation for Dynamic Object States
+            <h1 class="title is-1 publication-title">GaussianFluent: Gaussian Simulation for Dynamic Scenes
               with Mixed Materials</h1>
 
+            <div class="publication-authors">
+              <span class="author-block">Bei Huang<sup>1,2,*</sup></span>,
+              <span class="author-block">Yixin Chen<sup>2,*,&dagger;</sup></span>,
+              <span class="author-block">Ruijie Lu<sup>1,2</sup></span>,
+              <span class="author-block">Gang Zeng<sup>1</sup></span>,
+              <span class="author-block">Hongbin Zha<sup>1</sup></span>,
+              <span class="author-block">Yuru Pei<sup>1,&dagger;</sup></span>,
+              <span class="author-block">Siyuan Huang<sup>2,&dagger;</sup></span>
+            </div>
 
+            <div class="publication-affiliations">
+              <sup>1</sup>State Key Laboratory of General Artificial Intelligence, Peking University
+              &nbsp;&nbsp;
+              <sup>2</sup>State Key Laboratory of General Artificial Intelligence, BIGAI
+            </div>
+            <div class="publication-notes">
+              <sup>*</sup>Equal contribution &nbsp;&nbsp; <sup>&dagger;</sup>Corresponding authors
+            </div>
+            <div class="publication-venue">CVPR 2026</div>
+
+            <div class="publication-links">
+              <a class="button is-rounded" href="https://arxiv.org/abs/2601.09265" target="_blank" rel="noopener">
+                <span class="icon"><i class="ai ai-arxiv"></i></span>
+                <span>arXiv</span>
+              </a>
+              <a class="button is-rounded" href="https://arxiv.org/pdf/2601.09265" target="_blank" rel="noopener">
+                <span class="icon"><i class="fas fa-file-pdf"></i></span>
+                <span>Paper</span>
+              </a>
+              <a class="button is-rounded" href="https://github.com/HB-pencil-zero/GaussianFluent/tree/main" target="_blank" rel="noopener">
+                <span class="icon"><i class="fab fa-github"></i></span>
+                <span>Code</span>
+              </a>
             </div>
           </div>
         </div>
@@ -75,7 +407,7 @@
     </div>
   </section>
 
-  <section class="hero is-light is-small">
+  <section class="hero is-light is-small results-band">
     <div class="hero-body">
       <div class="container">
         <div id="results-carousel" class="carousel results-carousel">
@@ -183,8 +515,9 @@
       <div class="columns is-centered has-text-centered">
         <div class="column is-four-fifths">
           <div class="publication-video">
-            <iframe src="./static/videos2/demo.mp4"
-                    frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+            <video controls playsinline preload="auto">
+              <source src="./static/videos2/demo.mp4?v=full-147s" type="video/mp4">
+            </video>
           </div>
           <h2 class="subtitle has-text-centered">
             <span class="dnerf">GaussianFluent</span> supports multple objects simulation, especially those with complex interior. And further supports scene relighting.
@@ -278,8 +611,7 @@
             </video>
           </div>
         </div>
-      
-
+      </div>
     </div>
   </section>
 
@@ -315,15 +647,6 @@
     </div>
   </section>
 
-
-
-
-
-
-
-    
-    </div>
-  </footer>
 
 </body>
 
