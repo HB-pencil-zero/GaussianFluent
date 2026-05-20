@@ -44,13 +44,18 @@
   <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
   <style>
     :root {
-      --ink: #17212b;
-      --muted: #5e6872;
-      --line: #dce4ea;
+      --ink: #101820;
+      --muted: #5f6b76;
+      --line: #e5e9ee;
       --paper: #ffffff;
-      --wash: #f4f7f8;
+      --wash: #f7f9fb;
       --accent: #1e7d74;
       --accent-strong: #135f58;
+      --wash-blue: #edf6fb;
+      --wash-mint: #edf8f3;
+      --wash-lilac: #f4effb;
+      --wash-rose: #fff1f3;
+      --wash-amber: #fff7e8;
     }
 
     html {
@@ -58,7 +63,7 @@
     }
 
     body {
-      background: var(--wash);
+      background: var(--paper);
       color: var(--ink);
       font-size: 17px;
       line-height: 1.72;
@@ -66,31 +71,84 @@
     }
 
     .container.is-max-desktop {
-      max-width: 1040px !important;
+      max-width: 1080px !important;
+    }
+
+    .site-nav {
+      backdrop-filter: blur(18px);
+      background: rgba(255, 255, 255, 0.88);
+      border-bottom: 1px solid rgba(16, 24, 32, 0.08);
+      left: 0;
+      position: sticky;
+      right: 0;
+      top: 0;
+      z-index: 30;
+    }
+
+    .site-nav-inner {
+      align-items: center;
+      display: flex;
+      justify-content: space-between;
+      margin: 0 auto;
+      max-width: 1180px;
+      padding: 0.78rem 1.5rem;
+    }
+
+    .site-nav .brand {
+      color: var(--ink);
+      font-family: 'Google Sans', sans-serif;
+      font-size: 1.02rem;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .site-nav .nav-links {
+      align-items: center;
+      display: flex;
+      gap: 1.1rem;
+    }
+
+    .site-nav a {
+      color: #303b45;
+      font-family: 'Google Sans', sans-serif;
+      font-size: 0.94rem;
+      font-weight: 700;
+    }
+
+    .site-nav a:hover {
+      color: var(--accent);
     }
 
     .publication-hero {
-      background: var(--paper);
-      border-bottom: 1px solid var(--line);
+      background:
+        radial-gradient(circle at 10% 18%, rgba(255, 255, 255, 0.16) 0 6px, transparent 7px),
+        radial-gradient(circle at 78% 15%, rgba(255, 255, 255, 0.12) 0 6px, transparent 7px),
+        radial-gradient(circle at 64% 72%, rgba(255, 255, 255, 0.11) 0 7px, transparent 8px),
+        linear-gradient(112deg, #22b18a 0%, #23a6d5 32%, #7b6fe8 64%, #c35dcc 100%);
+      overflow: hidden;
+      position: relative;
     }
 
     .publication-hero .hero-body {
-      padding: 4.25rem 1.5rem 3.2rem;
+      padding: 5.5rem 1.5rem 5.1rem;
+      position: relative;
+      z-index: 1;
     }
 
     .publication-title {
-      color: var(--ink);
-      font-size: clamp(2.2rem, 5vw, 4.45rem) !important;
-      font-weight: 800;
+      color: #ffffff;
+      font-size: clamp(2.25rem, 5vw, 4.7rem) !important;
+      font-weight: 850;
       letter-spacing: 0;
-      line-height: 1.04;
-      margin: 0 auto 1.35rem;
+      line-height: 1;
+      margin: 0 auto 1.45rem;
       max-width: 1120px;
+      text-shadow: 0 8px 24px rgba(25, 32, 75, 0.3);
     }
 
     .publication-authors {
-      color: var(--ink);
-      font-size: 1.15rem;
+      color: rgba(255, 255, 255, 0.96);
+      font-size: 1.12rem;
       line-height: 1.75;
       margin-bottom: 0.85rem;
     }
@@ -103,18 +161,19 @@
     .publication-affiliations,
     .publication-notes,
     .publication-venue {
-      color: var(--muted);
+      color: rgba(255, 255, 255, 0.86);
       font-family: 'Google Sans', sans-serif;
-      font-size: 0.98rem;
+      font-size: 0.96rem;
       line-height: 1.55;
       margin: 0.25rem auto;
       max-width: 920px;
     }
 
     .publication-venue {
-      color: var(--accent-strong);
-      font-weight: 700;
-      margin-top: 0.75rem;
+      color: #ffffff;
+      font-size: 1.28rem;
+      font-weight: 800;
+      margin-top: 0.95rem;
       width: auto;
     }
 
@@ -123,14 +182,15 @@
       flex-wrap: wrap;
       gap: 0.65rem;
       justify-content: center;
-      margin-top: 1.55rem;
+      margin-top: 1.65rem;
     }
 
     .publication-links .button {
-      background: #17212b;
-      border: 1px solid #17212b;
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.34);
       border-radius: 999px;
       color: #fff;
+      box-shadow: 0 12px 30px rgba(36, 24, 82, 0.12);
       font-family: 'Google Sans', sans-serif;
       font-weight: 700;
       padding-left: 1rem;
@@ -140,8 +200,8 @@
 
     .publication-links .button:hover,
     .publication-links .button:focus {
-      background: var(--accent);
-      border-color: var(--accent);
+      background: rgba(255, 255, 255, 0.26);
+      border-color: rgba(255, 255, 255, 0.52);
       color: #fff;
       transform: translateY(-1px);
     }
@@ -152,20 +212,19 @@
 
     .teaser {
       background: var(--paper);
-      border-bottom: 1px solid var(--line);
       font-family: 'Google Sans', sans-serif;
     }
 
     .teaser .hero-body {
-      padding: 0 1.5rem 3.75rem;
+      padding: 2rem 1.5rem 2.35rem;
     }
 
     .interpolation-image,
     video,
     .publication-video {
       border: 1px solid rgba(23, 33, 43, 0.12);
-      border-radius: 8px !important;
-      box-shadow: 0 18px 45px rgba(23, 33, 43, 0.11);
+      border-radius: 12px !important;
+      box-shadow: 0 18px 44px rgba(16, 24, 32, 0.1);
       overflow: hidden;
     }
 
@@ -179,25 +238,35 @@
 
     .results-band {
       background: var(--paper) !important;
-      border-bottom: 1px solid var(--line);
-      border-top: 1px solid var(--line);
     }
 
     .results-band .hero-body {
-      padding: 2.25rem 1.5rem 3rem;
+      padding: 1.25rem 1.5rem 4.25rem;
+    }
+
+    .gallery-title {
+      margin-bottom: 0.35rem !important;
+    }
+
+    .gallery-subtitle {
+      color: var(--muted);
+      font-family: 'Google Sans', sans-serif;
+      margin: 0 auto 1.65rem;
+      max-width: 760px;
+      text-align: center;
     }
 
     .results-carousel {
       margin: 0 auto;
-      max-width: 1220px;
+      max-width: 1180px;
       overflow: hidden;
     }
 
     .results-carousel .item {
       background: var(--paper);
       border: 1px solid rgba(23, 33, 43, 0.12);
-      border-radius: 8px;
-      box-shadow: 0 18px 40px rgba(23, 33, 43, 0.1);
+      border-radius: 12px;
+      box-shadow: 0 14px 32px rgba(16, 24, 32, 0.09);
       font-size: 0;
       margin: 0.65rem;
       overflow: hidden;
@@ -216,42 +285,66 @@
 
     .section {
       background: var(--paper);
-      padding: 5rem 1.5rem;
+      padding: 4.65rem 1.5rem;
     }
 
-    .section:nth-of-type(even) {
-      background: var(--wash);
+    #abstract {
+      background: var(--paper);
     }
 
-    .section + .section {
+    #pipeline {
+      background: var(--paper);
+    }
+
+    #physics {
+      background: var(--paper);
+    }
+
+    .relighting-section {
+      background: var(--paper);
+    }
+
+    .environment-section {
+      background: var(--paper);
+    }
+
+    .section.alt-section {
+      background: var(--paper);
+    }
+
+    .overview-strip {
+      background: var(--paper);
+    }
+
+    .overview-strip {
+      border-bottom: 1px solid var(--line);
       border-top: 1px solid var(--line);
+      padding: 2.25rem 1.5rem;
+    }
+
+    .overview-strip p {
+      color: #303b45;
+      font-family: 'Google Sans', sans-serif;
+      font-size: 1.18rem;
+      line-height: 1.6;
+      margin: 0 auto;
+      max-width: 940px;
+      text-align: center;
     }
 
     .section .title.is-3 {
       color: var(--ink);
-      font-size: clamp(1.7rem, 3vw, 2.35rem);
-      font-weight: 780;
+      font-size: clamp(1.85rem, 3vw, 2.55rem);
+      font-weight: 820;
       letter-spacing: 0;
       line-height: 1.16;
-      margin-bottom: 1.1rem;
-      padding-left: 1rem;
-      position: relative;
-    }
-
-    .section .title.is-3::before {
-      background: var(--accent);
-      border-radius: 999px;
-      bottom: 0.18em;
-      content: "";
-      left: 0;
-      position: absolute;
-      top: 0.18em;
-      width: 4px;
+      margin-bottom: 1.35rem;
+      text-align: center;
     }
 
     .content p,
     .section p {
-      color: var(--muted);
+      color: #35414c;
       font-size: 1.04rem;
       line-height: 1.78;
       margin-bottom: 1.15rem;
@@ -264,7 +357,7 @@
 
     .publication-video {
       background: #111820;
-      margin-top: 2.5rem;
+      margin-top: 2.25rem;
     }
 
     .publication-video video {
@@ -302,8 +395,8 @@
     }
 
     .video-compare-container {
-      border-radius: 8px;
-      box-shadow: 0 18px 45px rgba(23, 33, 43, 0.11);
+      border-radius: 12px;
+      box-shadow: 0 18px 44px rgba(16, 24, 32, 0.1);
       overflow: hidden;
     }
 
@@ -319,7 +412,19 @@
       }
 
       .publication-hero .hero-body {
-        padding: 3rem 1rem 2.4rem;
+        padding: 3.4rem 1rem 2rem;
+      }
+
+      .site-nav-inner {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.45rem;
+        padding: 0.7rem 1rem;
+      }
+
+      .site-nav .nav-links {
+        flex-wrap: wrap;
+        gap: 0.7rem;
       }
 
       .publication-authors .author-block {
@@ -346,6 +451,20 @@
 </head>
 
 <body>
+  <nav class="site-nav">
+    <div class="site-nav-inner">
+      <div class="brand">GaussianFluent</div>
+      <div class="nav-links">
+        <a href="#abstract">Abstract</a>
+        <a href="#gallery">Gallery</a>
+        <a href="#pipeline">Pipeline</a>
+        <a href="#physics">Physics</a>
+        <a href="https://arxiv.org/abs/2601.09265" target="_blank" rel="noopener">arXiv</a>
+        <a href="https://github.com/HB-pencil-zero/GaussianFluent/tree/main" target="_blank" rel="noopener">Code</a>
+      </div>
+    </div>
+  </nav>
+
   <section class="hero publication-hero">
     <div class="hero-body">
       <div class="container is-max-desktop">
@@ -372,7 +491,7 @@
             <div class="publication-notes">
               <sup>*</sup>Equal contribution &nbsp;&nbsp; <sup>&dagger;</sup>Corresponding authors
             </div>
-            <div class="publication-venue">CVPR 2026</div>
+            <div class="publication-venue">CVPR 2026 Oral</div>
 
             <div class="publication-links">
               <a class="button is-rounded" href="https://arxiv.org/abs/2601.09265" target="_blank" rel="noopener">
@@ -403,13 +522,22 @@
         <img src="static/images/teaser.jpg" class="interpolation-image" />
       </div>
 
+    </div>
+  </section>
 
+  <section class="overview-strip">
+    <div class="container is-max-desktop">
+      <p>
+        <strong>TL;DR:</strong> GaussianFluent reconstructs photorealistic internal structures for Gaussian Splatting, simulates brittle fracture with CD-MPM, and supports dynamic relighting for newly exposed surfaces.
+      </p>
     </div>
   </section>
 
   <section class="hero is-light is-small results-band">
     <div class="hero-body">
       <div class="container">
+        <h2 class="title is-3 gallery-title" id="gallery">Selected Results</h2>
+        <p class="gallery-subtitle">Representative simulations rendered from multiple views, showing fracture, material composition, and relighting.</p>
         <div id="results-carousel" class="carousel results-carousel">
           <div class="item item-jelly">
             <video poster="" id="fox" autoplay controls muted loop playsinline height="100%">
@@ -476,7 +604,7 @@
     </div>
   </section>
   
-  <section class="section">
+  <section class="section" id="abstract">
     <div class="container is-max-desktop">
       <!-- Abstract. -->
       <div class="columns is-centered has-text-centered">
@@ -530,7 +658,7 @@
     </div>
   </section>
 
-  <section class="section">
+  <section class="section alt-section" id="pipeline">
     <div class="container is-max-desktop">
       <h2 class="title is-3">Pipeline</h2>
       <img src="static/images/workflow.jpg" class="interpolation-image" />
@@ -544,7 +672,7 @@
     </div>
   </section>
 
-  <section class="section">
+  <section class="section" id="physics">
 
 
 
@@ -577,7 +705,7 @@
 
   </section>
 
-  <section class="section">
+  <section class="section alt-section">
     <div class="container is-max-desktop">
       <h2 class="title is-3">Different views of jelly-shooting simulations</h2>
       <!-- <div class="col-md-8 col-md-offset-2"> -->
@@ -595,7 +723,7 @@
   </section>
 
 
-  <section class="section">
+  <section class="section relighting-section">
     <div class="container is-max-desktop">
       <h2 class="title is-3">Blinn-Phong based Gaussian Relighting</h2>
       <p>
@@ -616,7 +744,7 @@
   </section>
 
 
-  <section class="section">
+  <section class="section environment-section">
     <div class="container is-max-desktop">
       <h2 class="title is-3">Interaction with Environment</h2>
       <p>
