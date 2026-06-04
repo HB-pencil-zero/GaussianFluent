@@ -1,6 +1,6 @@
 # GaussianFluent: Gaussian Simulation for Dynamic Scenes with Mixed Materials
 
-### [[arXiv](https://arxiv.org/abs/2601.09265)] [CVPR 2026]
+### [[arXiv](https://arxiv.org/abs/2601.09265)] [CVPR 2026 Award Candidate]
 ### [[Project Page](https://hb-pencil-zero.github.io/GaussianFluent/)]
 
 Bei Huang<sup>1,2*</sup>, Yixin Chen<sup>2*&dagger;</sup>, Ruijie Lu<sup>1,2</sup>, Gang Zeng<sup>1</sup>, Hongbin Zha<sup>1</sup>, Yuru Pei<sup>1&dagger;</sup>, Siyuan Huang<sup>2&dagger;</sup><br>
@@ -13,7 +13,7 @@ Bei Huang<sup>1,2*</sup>, Yixin Chen<sup>2*&dagger;</sup>, Ruijie Lu<sup>1,2</su
 Abstract: *3D Gaussian Splatting (3DGS) has emerged as a prominent 3D representation for high-fidelity and real-time rendering. Prior work has coupled physics simulation with Gaussians, but predominantly targets soft, deformable materials, leaving brittle fracture largely unresolved. This stems from two key obstacles: the lack of volumetric interiors with coherent textures in GS representation, and the absence of fracture-aware simulation methods for Gaussians. To address these challenges, we introduce GaussianFluent, a unified framework for realistic simulation and rendering of dynamic object states. First, it synthesizes photorealistic interiors by densifying internal Gaussians guided by generative models. Second, it integrates an optimized Continuum Damage Material Point Method (CD-MPM) to enable brittle fracture simulation at remarkably high speed. Our approach handles complex scenarios including mixed-material objects and multi-stage fracture propagation, achieving results infeasible with previous methods. Experiments clearly demonstrate GaussianFluent's capability for photo-realistic, real-time rendering with structurally consistent interiors, highlighting its potential for downstream application, such as VR and Robotics.*
 
 ## News
-- [2026-01-14] Our paper GaussianFluent has been accepted by CVPR 2026!
+- [2026-01-14] Our paper GaussianFluent has been accepted by CVPR 2026 as an Award Candidate!
 - [2026-04-01] Simulation Code Release.
 
 ## Cloning the Repository
