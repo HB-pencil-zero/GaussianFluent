@@ -42,14 +42,19 @@ pip install -e gaussian-splatting/submodules/simple-knn/
 By default, We use pytorch=2.0.1+cu117.
 
 ### Quick Start
-1. **Download Pretrained Models**:
-   Download the Gaussian Splatting models from our [Hugging Face Repository](https://huggingface.co/hbpencil01/GaussianFluent/tree/main).
-   Place the downloaded `model/` folder into the root directory of this project:
+1. **Download Pretrained 3DGS Assets**:
+   Download the released Gaussian Splatting assets and configs from our
+   [Hugging Face Repository](https://huggingface.co/hbpencil01/GaussianFluent/tree/main).
+   The current release includes `watermelon` and `jelly`.
+
+   Place the downloaded `model/` and `config/` folders into the root directory
+   of this project:
    ```shell
    # The structure should look like:
    # ./model/watermelon/...
    # ./model/jelly/...
-   # ./model/garden/...
+   # ./config/watermelon_config.json
+   # ./config/jelly_config_nacc.json
    ```
 
 2. **Run Simulation**:
