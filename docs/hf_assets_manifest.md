@@ -37,21 +37,24 @@ HF assets.
 
 `/root/autodl-tmp/hf_clean_upload` currently contains:
 
-| Scene | Included checkpoints | Notes |
+| Group | Included files | Notes |
 | --- | --- | --- |
-| `jelly` | `iteration_30000`, `iteration_5000` | Has `cameras.json`, `cfg_args`, `input.ply`. |
-| `watermelon` | `iteration_30000` | Has `cameras.json`, `cfg_args`, `input.ply`. |
+| `model/` | Standard 3DGS scenes from the `release` preset | Each scene has `cameras.json`, `cfg_args`, `input.ply`, and the latest selected `point_cloud.ply`. |
+| `config/` | All `cdmpmGaussian/config/*.json` files | Includes single-object, multi-object, backup, and variant simulation configs. |
+| `README.md` | Hugging Face model card | Documents release contents and usage. |
+| `asset_manifest.json` | Staging manifest | Records source paths and selected checkpoint iterations. |
 
 Use the staging helper from the repository root:
 
 ```bash
-# Dry run the default minimal package: watermelon + jelly.
-python scripts/stage_hf_assets.py --preset minimal --dry_run
+# Dry run the standard release package.
+python scripts/stage_hf_assets.py --preset release --dry_run
 
-# Stage the minimal package under /root/autodl-tmp/hf_clean_upload.
+# Stage the standard release package under /root/autodl-tmp/hf_clean_upload.
+python scripts/stage_hf_assets.py --preset release
+
+# Stage smaller subsets when needed.
 python scripts/stage_hf_assets.py --preset minimal
-
-# Stage additional examples.
 python scripts/stage_hf_assets.py --preset single_objects
 ```
 

@@ -29,8 +29,32 @@ CONFIG_BY_SCENE = {
     "watermelon_fruitninja": "watermelon_config_fruitninja.json",
 }
 
+RELEASE_SCENES = [
+    "bowl",
+    "bullet_0_psnr36",
+    "cake",
+    "cookie",
+    "dragonfruit",
+    "garden",
+    "garden_ours",
+    "jelly",
+    "kiwi",
+    "kiwi_0.04_psnr42",
+    "lollipop",
+    "milk2",
+    "milk_0.03_psnr32",
+    "oreo",
+    "pineple",
+    "pumkin",
+    "sand_castle",
+    "toast",
+    "watermelon",
+    "watermelon_fruitninja",
+]
+
 PRESETS = {
     "minimal": ["watermelon", "jelly"],
+    "release": RELEASE_SCENES,
     "single_objects": [
         "cake",
         "cookie",

@@ -45,7 +45,8 @@ By default, We use pytorch=2.0.1+cu117.
 1. **Download Pretrained 3DGS Assets**:
    Download the released Gaussian Splatting assets and configs from our
    [Hugging Face Repository](https://huggingface.co/hbpencil01/GaussianFluent/tree/main).
-   The current release includes `watermelon` and `jelly`.
+   The release includes multiple 3DGS assets and simulation configs; the
+   commands below use `watermelon` and `jelly` as quick-start examples.
 
    Place the downloaded `model/` and `config/` folders into the root directory
    of this project:
