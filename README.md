@@ -53,6 +53,7 @@ By default, We use pytorch=2.0.1+cu117.
    # The structure should look like:
    # ./model/watermelon/...
    # ./model/jelly/...
+   # ./model/garden/...   # optional, if downloaded separately
    # ./config/watermelon_config.json
    # ./config/jelly_config_nacc.json
    ```
