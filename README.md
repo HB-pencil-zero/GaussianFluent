@@ -45,8 +45,9 @@ By default, We use pytorch=2.0.1+cu117.
 1. **Download Pretrained 3DGS Assets**:
    Download the released Gaussian Splatting assets and configs from our
    [Hugging Face Repository](https://huggingface.co/hbpencil01/GaussianFluent/tree/main).
-   The release includes multiple 3DGS assets and simulation configs; the
-   commands below use `watermelon` and `jelly` as quick-start examples.
+   The release includes 22 3DGS asset directories and 32 simulation config
+   files from the research codebase; the commands below use `watermelon` and
+   `jelly` as quick-start examples.
 
    Place the downloaded `model/` and `config/` folders into the root directory
    of this project:
@@ -54,7 +55,8 @@ By default, We use pytorch=2.0.1+cu117.
    # The structure should look like:
    # ./model/watermelon/...
    # ./model/jelly/...
-   # ./model/garden/...   # optional, if downloaded separately
+   # ./model/garden/...
+   # ./model/trained_gs_fruitninja/...
    # ./config/watermelon_config.json
    # ./config/jelly_config_nacc.json
    ```

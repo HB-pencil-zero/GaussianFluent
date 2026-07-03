@@ -39,7 +39,7 @@ HF assets.
 
 | Group | Included files | Notes |
 | --- | --- | --- |
-| `model/` | Standard 3DGS scenes from the `release` preset | Each scene has `cameras.json`, `cfg_args`, `input.ply`, and the latest selected `point_cloud.ply`. |
+| `model/` | 3DGS assets from the `release` preset | Standard scenes have `cameras.json`, `cfg_args`, `input.ply`, and the latest selected `point_cloud.ply`; `trained_gs_fruitninja` is a standalone `.ply + .json` asset group. |
 | `config/` | All `cdmpmGaussian/config/*.json` files | Includes single-object, multi-object, backup, and variant simulation configs. |
 | `README.md` | Hugging Face model card | Documents release contents and usage. |
 | `asset_manifest.json` | Staging manifest | Records source paths and selected checkpoint iterations. |
@@ -51,7 +51,7 @@ Use the staging helper from the repository root:
 python scripts/stage_hf_assets.py --preset release --dry_run
 
 # Stage the standard release package under /root/autodl-tmp/hf_clean_upload.
-python scripts/stage_hf_assets.py --preset release
+python scripts/stage_hf_assets.py --preset release --overwrite
 
 # Stage smaller subsets when needed.
 python scripts/stage_hf_assets.py --preset minimal
@@ -82,10 +82,10 @@ These directories have a standard 3DGS layout with `cameras.json`, `cfg_args`,
 | `toast` | 812M | `iteration_5000` | `tosta_config.json` |
 | `dragonfruit` | 863M | `iteration_30000` | `dragonfruit_config.json` |
 | `pumkin` | 997M | `iteration_30000` | `pumkin_config.json` |
-| `a752b28d-f` | 1.1G | `iteration_30000` | manual check needed |
+| `a752b28d-f` | 1.1G | `iteration_30000` | anonymous/hash local name; included because it is a valid standard 3DGS asset |
 | `cake` | 1.1G | `iteration_30000` | `cake_config.json` |
 | `kiwi` | 1.3G | `iteration_30000` | `kiwi_config.json` |
-| `garden` | 2.4G | `iteration_30000` | manual check needed; has `transform_matrix.txt` |
+| `garden` | 2.4G | `iteration_30000` | public scene asset; staging keeps only standard checkpoint files |
 
 ## FruitNinja Standalone PLY Assets
 
@@ -102,10 +102,10 @@ PLY files plus small JSON metadata/config files:
 | `pomegranate` | 158M |
 | `watermelon` | 516M |
 
-Suggested HF layout:
+HF layout:
 
 ```text
-fruitninja/
+model/trained_gs_fruitninja/
   apple.ply
   apple.json
   bread.ply
@@ -113,14 +113,40 @@ fruitninja/
   ...
 ```
 
-## Release Suggestions
+## Release Scope
 
-1. Keep the first public HF package small and reproducible:
-   `watermelon`, `jelly`, and their release configs.
-2. Add a second archive for additional single-object examples:
-   `cake`, `cookie`, `dragonfruit`, `kiwi`, `oreo`, `pineple`, `pumkin`,
-   `sand_castle`, and `toast`.
-3. Publish `trained_gs_fruitninja` as a separate optional asset group because
-   its file layout differs from standard 3DGS checkpoints.
-4. Keep `garden`, `garden_ours`, and anonymous/hash-named directories out of the
-   first release until ownership, license, and scene naming are checked.
+The current release preset is intended to mirror the usable local assets under
+`cdmpmGaussian/model` while keeping logs, training intermediates, code
+submodules, and temporary PLY files out of HF.
+
+Included standard 3DGS directories:
+
+```text
+a752b28d-f
+bowl
+bullet_0_psnr36
+cake
+cookie
+dragonfruit
+garden
+garden_ours
+jelly
+kiwi
+kiwi_0.04_psnr42
+lollipop
+milk2
+milk_0.03_psnr32
+oreo
+pineple
+pumkin
+sand_castle
+toast
+watermelon
+watermelon_fruitninja
+```
+
+Included standalone asset group:
+
+```text
+trained_gs_fruitninja
+```
