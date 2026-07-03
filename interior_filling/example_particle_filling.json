@@ -1,0 +1,14 @@
+{
+  "particle_filling": {
+    "n_grid": 256,
+    "density_threshold": 5.0,
+    "search_threshold": 3.0,
+    "max_particles_num": 2000000,
+    "max_partciels_per_cell": 1,
+    "search_exclude_direction": 5,
+    "ray_cast_direction": 4,
+    "boundary": null,
+    "smooth": false,
+    "visualize": false
+  }
+}

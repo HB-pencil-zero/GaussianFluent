@@ -4,9 +4,12 @@ import numpy as np
 import taichi as ti
 import mcubes
 import sys
-sys.path.append("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/gaussian-splatting")
-from scene.gaussian_model import GaussianModel
-from utils.system_utils import searchForMaxIteration
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+GAUSSIAN_SPLATTING_PATH = PROJECT_ROOT / "gaussian-splatting"
+if GAUSSIAN_SPLATTING_PATH.exists():
+    sys.path.append(str(GAUSSIAN_SPLATTING_PATH))
 # 1. densify grids
 # 2. identify grids whose density is larger than some threshold
 # 3. filling grids with particles
@@ -275,6 +278,9 @@ def assign_particle_to_grid(
 
 
 def load_checkpoint(model_path, sh_degree=3, iteration=-1):
+    from scene.gaussian_model import GaussianModel
+    from utils.system_utils import searchForMaxIteration
+
     # Find checkpoint
     checkpt_dir = os.path.join(model_path, "point_cloud")
     if iteration == -1:
@@ -342,7 +348,7 @@ def append_gaussian_data_flexible(
     pos2 = gaussians._xyz.detach().clone()
     
     if transform_file:
-        transform_matrix = torch.from_numpy(np.loadtxt("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/model/garden/transform_matrix.txt")).to(device).float()
+        transform_matrix = torch.from_numpy(np.loadtxt(transform_file)).to(device).float()
         pos2 = pos2  @ transform_matrix[:3, :3].T  + transform_matrix[:3, 3]
     pos2 = (pos2 - original_mean_pos) *  scale_origin 
     

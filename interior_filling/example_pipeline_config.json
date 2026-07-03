@@ -1,0 +1,99 @@
+{
+  "workspace": "output/interior/watermelon_pipeline",
+  "geometry": {
+    "enabled": true,
+    "model_path": "model/watermelon",
+    "config": "config/watermelon_config.json",
+    "output_path": "output/interior/watermelon_pipeline/geometry",
+    "iteration": -1,
+    "sh_degree": 3,
+    "save_debug_ply": true
+  },
+  "render_commands": [
+    {
+      "name": "render_slice_views",
+      "cwd": ".",
+      "command": "echo replace this with the scene-specific slice rendering command"
+    }
+  ],
+  "render_slices": {
+    "enabled": false,
+    "model_path": "model/watermelon",
+    "output_dir": "output/interior/watermelon_pipeline/slices",
+    "iteration": -1,
+    "sh_degree": 3,
+    "background": [0.0, 0.0, 0.0],
+    "camera_defaults": {
+      "default_camera_index": 0,
+      "width": 1280,
+      "height": 720,
+      "scales": 1.1
+    },
+    "views": [
+      {
+        "name": "0000",
+        "default_camera_index": 0
+      }
+    ]
+  },
+  "supervision": {
+    "dataset_root": "output/interior/watermelon_pipeline/mvinpainter_dataset",
+    "frame_pattern": "*.png",
+    "views": [
+      {
+        "name": "normal",
+        "images": "/root/autodl-tmp/PhysGaussian/output/watermelon/az0_el0_da6",
+        "masks": "/root/autodl-tmp/PhysGaussian/output/watermelon_masked_replaced/az0_el0_da6",
+        "reference_image": "/root/autodl-tmp/PhysGaussian/reference_images/watermelon.png",
+        "reference_name": "0000.png"
+      }
+    ]
+  },
+  "mvinpainter": {
+    "enabled": true,
+    "repo_path": "/root/autodl-tmp/MVInpainter",
+    "conda_env": "mvinpainter",
+    "cuda_visible_devices": "0",
+    "script": "test_nvs.py",
+    "load_path": "check_points/mvinpainter_o_512",
+    "dataset_root": "output/interior/watermelon_pipeline/mvinpainter_dataset",
+    "output_path": "output/interior/watermelon_pipeline/mvinpainter_output",
+    "command_path": "output/interior/watermelon_pipeline/run_mvinpainter.sh",
+    "edited_index": 0,
+    "resume_from_checkpoint": "best",
+    "val_cfg": 7.5,
+    "img_height": 512,
+    "img_width": 512,
+    "sampling_interval": 1.0,
+    "nframe": 24,
+    "limit_frame": 24,
+    "save_images": true,
+    "prompt": "A realistic detailed close-up of the internal fruit flesh texture, filling the whole frame, no rind, no background."
+  },
+  "projection": {
+    "enabled": true,
+    "mask_mode": "black",
+    "mask_threshold": 0.01,
+    "glob": {
+      "point_xy_dir": "output/interior/watermelon_pipeline/projections",
+      "point_xy_pattern": "*.pt",
+      "target_dir": "output/interior/watermelon_pipeline/mvinpainter_output/normal",
+      "target_suffix": ".png",
+      "mask_dir": "output/interior/watermelon_pipeline/mvinpainter_dataset/normal/masks",
+      "output_dir": "output/interior/watermelon_pipeline/projected_sh_dc"
+    },
+    "pairs": []
+  },
+  "apply_projection": {
+    "enabled": true,
+    "model_path": "model/watermelon",
+    "output_ply": "output/interior/watermelon_pipeline/final/point_cloud.ply",
+    "projection_glob": "output/interior/watermelon_pipeline/projected_sh_dc/*_sh_dc.pt",
+    "iteration": -1,
+    "sh_degree": 3,
+    "start_index": 0,
+    "end_index": null,
+    "merge_mode": "average",
+    "zero_rest": true
+  }
+}

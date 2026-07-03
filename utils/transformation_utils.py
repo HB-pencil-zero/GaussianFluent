@@ -4,7 +4,12 @@ from utils.camera_view_utils import *
 from typing import Optional
 from particle_filling.filling import *
 import sys
-sys.path.append("/root/autodl-tmp/debug_physgaussian/cdmpmGaussian/gaussian-splatting")
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+GAUSSIAN_SPLATTING_PATH = PROJECT_ROOT / "gaussian-splatting"
+if GAUSSIAN_SPLATTING_PATH.exists():
+    sys.path.append(str(GAUSSIAN_SPLATTING_PATH))
 from utils.sh_utils import eval_sh
 
 

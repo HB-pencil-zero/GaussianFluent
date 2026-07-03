@@ -23,6 +23,10 @@ This repository uses a modified [gaussian-splatting](https://github.com/HB-penci
 git clone --recurse-submodules git@github.com:HB-pencil-zero/GaussianFluent.git
 ```
 
+The interior texture back-projection code requires this modified submodule,
+because its rasterizer returns per-Gaussian screen coordinates as `point_xy`.
+Use `HB-pencil-zero/gaussian-splatting` commit `11b81b5` or newer.
+
 ## Setup
 
 ### Python Environment
@@ -58,6 +62,19 @@ By default, We use pytorch=2.0.1+cu117.
    python gs_simulation/jelly/gs_simulation_jellynacc.py --model_path model/jelly --output_path output/jelly --config config/jelly_config_nacc.json --render_img --compile_video
    ```
    The images and video results will be saved to the specified output path.
+
+## Interior Filling
+
+The reusable interior geometry filling code is organized under
+[`interior_filling/`](interior_filling/README.md). It provides a standalone
+command for generating filled internal particles from a trained 3DGS checkpoint,
+plus a pipeline wrapper for preparing external inpainting inputs and applying
+saved `point_xy` back-projection results.
+
+Interior texture inpainting can use the third-party
+[MVInpainter](https://github.com/ewrfcas/MVInpainter) project. MVInpainter is
+not part of this repository and is not redistributed with the GaussianFluent
+code or model assets.
 
 ## Citation
 
